@@ -1,4 +1,4 @@
-name: Build and Analyze with SonarCloud
+name: Build, Test & Coverage Analysis
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
           echo "📊 Frontend coverage report generated!"
           ls -la coverage/bobapp/ || echo "No coverage directory found"
 
-      # 7️⃣ Upload Backend Coverage to SonarCloud
+      # 7️⃣ Upload Backend Coverage to SonarCloud (CHEMIN CORRIGÉ)
       - name: SonarCloud Analysis with Coverage
         working-directory: back
         env:
