@@ -1,4 +1,3 @@
-// front/src/app/app.component.spec.ts (version améliorée)
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app.component';
 import { JokesService } from "./services/jokes.service";
@@ -8,15 +7,21 @@ import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, BehaviorSubject } from 'rxjs';
+import { Joke } from './model/joke.model';
 
 describe('AppComponent', () => {
   let component: AppComponent;
   let fixture: any;
   let jokesService: jasmine.SpyObj<JokesService>;
+  let jokeSubject: BehaviorSubject<Joke | null>;
 
   beforeEach(async () => {
+    // Créer un BehaviorSubject pour simuler le service
+    jokeSubject = new BehaviorSubject<Joke | null>(null);
+    
     const spy = jasmine.createSpyObj('JokesService', ['getRandomJoke', 'joke$']);
+    spy.joke$.and.returnValue(jokeSubject.asObservable());
 
     await TestBed.configureTestingModule({
       declarations: [AppComponent],
@@ -43,30 +48,39 @@ describe('AppComponent', () => {
   });
 
   it('should initialize with a joke on ngOnInit', () => {
-    const mockJoke = { joke: 'Test joke', response: 'Test response' };
-    jokesService.joke$.and.returnValue(of(mockJoke));
+    spyOn(component, 'getRandomJoke');
     
     component.ngOnInit();
     
-    expect(jokesService.getRandomJoke).toHaveBeenCalled();
+    expect(component.getRandomJoke).toHaveBeenCalled();
   });
 
   it('should call getRandomJoke when button is clicked', () => {
-    const mockJoke = { joke: 'Test joke', response: 'Test response' };
-    jokesService.joke$.and.returnValue(of(mockJoke));
-    
     component.getRandomJoke();
     
     expect(jokesService.getRandomJoke).toHaveBeenCalled();
   });
 
   it('should display joke content when joke is available', () => {
-    const mockJoke = { joke: 'Test joke', response: 'Test response' };
-    jokesService.joke$.and.returnValue(of(mockJoke));
+    const mockJoke: Joke = { joke: 'Test joke', response: 'Test response' };
     
+    // Mettre à jour le subject avec une blague
+    jokeSubject.next(mockJoke);
     fixture.detectChanges();
     
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.content')).toBeTruthy();
+    const jokeElement = compiled.querySelector('.joke');
+    
+    // Vérifier que la blague est affichée
+    expect(jokeElement?.textContent?.trim()).toBe('Test joke');
+  });
+
+  it('should have correct title in toolbar', () => {
+    fixture.detectChanges();
+    
+    const compiled = fixture.nativeElement as HTMLElement;
+    const titleElement = compiled.querySelector('mat-toolbar span');
+    
+    expect(titleElement?.textContent?.trim()).toBe('Bob app');
   });
 });
