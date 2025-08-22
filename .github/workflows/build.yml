@@ -70,7 +70,7 @@ jobs:
           SONAR_PROJECT_KEY: EmySim_BobApp
           SONAR_ORGANIZATION: emysim
           SONAR_HOST_URL: https://sonarcloud.io
-        run: mvn sonar:sonar
+        run: mvn sonar:sonar -Dsonar.projectKey=${SONAR_PROJECT_KEY} -Dsonar.organization=${SONAR_ORGANIZATION} -Dsonar.host.url=${SONAR_HOST_URL} -Dsonar.login=${SONAR_TOKEN}
 
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
