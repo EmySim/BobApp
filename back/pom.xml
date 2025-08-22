@@ -57,6 +57,15 @@
 					</execution>
 				</executions>
 			</plugin>
+
+			<!-- SonarQube Maven Plugin - VERSION COMPATIBLE JAVA 11 -->
+			<plugin>
+				<groupId>org.sonarsource.scanner.maven</groupId>
+				<artifactId>sonar-maven-plugin</artifactId>
+				<version>3.6.0.1398</version>
+			</plugin>
+
+
 		</plugins>
 	</build>
 </project>
