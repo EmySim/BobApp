@@ -23,7 +23,7 @@ jobs:
             exit 1
           else
             echo "SONAR_TOKEN is present. Length: ${#SONAR_TOKEN}"
-          fi
+          if
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
