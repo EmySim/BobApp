@@ -16,6 +16,18 @@ jobs:
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
 
+      # Compile Java sources before SonarQube scan (adapt to your build tool)
+      - name: Build Java sources
+        run: |
+          if [ -f "gradlew" ]; then
+            ./gradlew build
+          elif [ -f "pom.xml" ]; then
+            mvn clean compile
+          else
+            echo "No Gradle or Maven build file found. Skipping Java compilation."
+          fi
+        shell: bash
+
       - name: Check SONAR_TOKEN presence
         run: |
           if [ -z "${SONAR_TOKEN}" ]; then
@@ -35,3 +47,7 @@ jobs:
           SONAR_HOST_URL: "https://sonarcloud.io"
           SONAR_PROJECT_KEY: "EmySim_BobApp"
           SONAR_ORGANIZATION: "emysim"
+        with:
+          # Adapt sonar.java.binaries according to your build tool
+          args: >
+            -Dsonar.java.binaries=build/classes
