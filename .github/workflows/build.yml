@@ -9,7 +9,7 @@ on:
 
 jobs:
   sonarqube:
-    name: SonarQube
+    name: SonarCloud Analysis
     runs-on: windows-latest
     steps:
       - name: Checkout code
@@ -17,7 +17,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 11 for Application Build
+      - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
           java-version: '11'
@@ -35,43 +35,22 @@ jobs:
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: mvn clean verify
+        run: mvn clean compile
 
-      - name: Set up JDK 17 for SonarCloud Scan
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Restore SonarCloud cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
-          restore-keys: ${{ runner.os }}-sonar
-
-      - name: Check SONAR_TOKEN presence
-        run: |
-          if [ -z "${SONAR_TOKEN}" ]; then
-            echo "SONAR_TOKEN is missing or empty!"
-            exit 1
-          else
-            echo "SONAR_TOKEN is present. Length: ${#SONAR_TOKEN}"
-          fi
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        shell: bash
+      - name: Run tests (optional)
+        working-directory: back
+        run: mvn test
 
       - name: SonarCloud Scan
         working-directory: back
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_PROJECT_KEY: EmySim_BobApp
-          SONAR_ORGANIZATION: emysim    
-          SONAR_HOST_URL: https://sonarcloud.io 
-        run: mvn sonar:sonar 
-
+        run: mvn sonar:sonar \
+          -Dsonar.projectKey=EmySim_BobApp \
+          -Dsonar.organization=emysim \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.login=${SONAR_TOKEN} \
+          -Dsonar.java.binaries=target/classes
 
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
