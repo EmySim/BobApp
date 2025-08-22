@@ -67,11 +67,7 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn sonar:sonar \
-            -Dsonar.projectKey=EmySim_BobApp \
-            -Dsonar.organization=emysim \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.login=${SONAR_TOKEN}
+          mvn sonar:sonar -Dsonar.projectKey=EmySim_BobApp -Dsonar.organization=emysim -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=${SONAR_TOKEN}
 
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
