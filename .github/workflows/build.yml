@@ -12,21 +12,43 @@ jobs:
     name: SonarQube
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis
+          fetch-depth: 0
 
-      # Compile Java sources before SonarQube scan (adapt to your build tool)
+      - name: Set up JDK 11 for Application Build
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Restore Maven packages cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
       - name: Build Java sources
-        run: |
-          if [ -f "gradlew" ]; then
-            ./gradlew build
-          elif [ -f "pom.xml" ]; then
-            mvn clean compile
-          else
-            echo "No Gradle or Maven build file found. Skipping Java compilation."
-          fi
-        shell: bash
+        working-directory: back
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: mvn clean verify
+
+      - name: Set up JDK 17 for SonarCloud Scan
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Restore SonarCloud cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
 
       - name: Check SONAR_TOKEN presence
         run: |
@@ -41,13 +63,23 @@ jobs:
         shell: bash
 
       - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v5
+        working-directory: back
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: "https://sonarcloud.io"
-          SONAR_PROJECT_KEY: "EmySim_BobApp"
-          SONAR_ORGANIZATION: "emysim"
+          SONAR_PROJECT_KEY: EmySim_BobApp
+          SONAR_ORGANIZATION: emysim
+          SONAR_HOST_URL: https://sonarcloud.io
+        run: mvn sonar:sonar
+
+      - name: Save Maven packages cache
+        uses: actions/cache/save@v4
         with:
-          # Adapt sonar.java.binaries according to your build tool
-          args: >
-            -Dsonar.java.binaries=build/classes
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
+
+      - name: Save SonarCloud cache
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
