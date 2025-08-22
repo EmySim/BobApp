@@ -20,11 +20,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Setup Java (JDK 11 suffisant pour compilation)
-      - name: Set up JDK 11
+      # 2️⃣ Setup Java (JDK 17 requis pour le scanner SonarQube)
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
