@@ -29,16 +29,46 @@ module.exports = function (config) {
       subdir: '.',
       reporters: [
         { type: 'html' },
-        { type: 'text-summary' }
-      ]
+        { type: 'text-summary' },
+        { type: 'lcov' },          // 📊 Ajouté pour SonarCloud
+        { type: 'cobertura' }      // 📊 Format XML pour CI
+      ],
+      check: {
+        global: {
+          statements: 60,
+          branches: 50,
+          functions: 60,
+          lines: 60
+        }
+      }
     },
-    reporters: ['progress', 'kjhtml'],
+    reporters: ['progress', 'kjhtml', 'coverage'],
     port: 9876,
     colors: true,
     logLevel: config.LOG_INFO,
     autoWatch: true,
     browsers: ['Chrome'],
     singleRun: false,
-    restartOnFileChange: true
+    restartOnFileChange: true,
+    
+    // Configuration pour CI
+    customLaunchers: {
+      ChromeHeadlessCI: {
+        base: 'ChromeHeadless',
+        flags: [
+          '--no-sandbox',
+          '--disable-web-security',
+          '--disable-gpu',
+          '--remote-debugging-port=9222'
+        ]
+      }
+    }
   });
+
+  // Configuration spéciale pour les environnements CI
+  if (process.env.CI) {
+    config.browsers = ['ChromeHeadlessCI'];
+    config.singleRun = true;
+    config.autoWatch = false;
+  }
 };

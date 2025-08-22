@@ -9,9 +9,9 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  build-and-sonar:
-    name: Build & SonarCloud Analysis
-    runs-on: windows-latest
+  build-and-test:
+    name: Build, Test & Coverage Analysis
+    runs-on: ubuntu-latest
 
     steps:
       # 1️⃣ Checkout code
@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2️⃣ Setup Java (JDK 17 requis pour le scanner SonarQube)
+      # 2️⃣ Setup Java (JDK 17 for SonarQube scanner)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -28,7 +28,15 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3️⃣ Restore Maven cache
+      # 3️⃣ Setup Node.js for Frontend
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'front/package-lock.json'
+
+      # 4️⃣ Restore Maven cache
       - name: Restore Maven packages cache
         uses: actions/cache/restore@v4
         with:
@@ -36,37 +44,99 @@ jobs:
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      # 4️⃣ Compile Java sources
-      - name: Build Java sources
+      # 5️⃣ Backend: Build and Test with Coverage
+      - name: Backend - Build and Test with Jacoco Coverage
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: mvn clean compile
+        run: |
+          echo "🔨 Building backend..."
+          mvn clean compile
+          
+          echo "🧪 Running backend tests with coverage..."
+          mvn test jacoco:report
+          
+          echo "📊 Jacoco coverage report generated!"
+          ls -la target/site/jacoco/ || echo "No jacoco directory found"
 
-      # 5️⃣ Run tests (optionnel mais recommandé)
-      - name: Run unit tests
-        working-directory: back
-        run: mvn test
+      # 6️⃣ Frontend: Install dependencies and test with coverage
+      - name: Frontend - Install dependencies
+        working-directory: front
+        run: |
+          echo "📦 Installing frontend dependencies..."
+          npm ci
 
-      # 6️⃣ SonarCloud analysis (Java 17 ou 11, peu importe)
-      - name: Perform SonarCloud Analysis
+      - name: Frontend - Run tests with coverage
+        working-directory: front
+        env:
+          CI: true
+        run: |
+          echo "🧪 Running frontend tests with coverage..."
+          npm run test:ci
+          
+          echo "📊 Frontend coverage report generated!"
+          ls -la coverage/bobapp/ || echo "No coverage directory found"
+
+      # 7️⃣ Upload Backend Coverage to SonarCloud
+      - name: SonarCloud Analysis with Coverage
         working-directory: back
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT_KEY: EmySim_BobApp
-          SONAR_ORGANIZATION: emysim
-          SONAR_HOST_URL: https://sonarcloud.io
-        run: mvn sonar:sonar
+        run: |
+          echo "🔍 Running SonarCloud analysis with coverage..."
+          mvn sonar:sonar \
+            -Dsonar.projectKey=EmySim_BobApp \
+            -Dsonar.organization=emysim \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+            -Dsonar.javascript.lcov.reportPaths=../front/coverage/bobapp/lcov.info
 
-      # 7️⃣ Save Maven cache
+      # 8️⃣ Upload Coverage Reports as Artifacts
+      - name: Upload Backend Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: back/target/site/jacoco/
+          retention-days: 30
+
+      - name: Upload Frontend Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: front/coverage/bobapp/
+          retention-days: 30
+
+      # 9️⃣ Display Coverage Summary
+      - name: Coverage Summary
+        run: |
+          echo "📊 COVERAGE SUMMARY 📊"
+          echo "========================"
+          
+          # Backend Coverage Summary
+          if [ -f "back/target/site/jacoco/index.html" ]; then
+            echo "✅ Backend (Jacoco): Report generated"
+            echo "📁 Location: back/target/site/jacoco/"
+          else
+            echo "❌ Backend coverage report not found"
+          fi
+          
+          # Frontend Coverage Summary  
+          if [ -f "front/coverage/bobapp/index.html" ]; then
+            echo "✅ Frontend (Angular): Report generated"
+            echo "📁 Location: front/coverage/bobapp/"
+          else
+            echo "❌ Frontend coverage report not found"
+          fi
+
+      # 🔟 Save Maven cache
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
 
-      # 8️⃣ Save Sonar cache
+      # 1️⃣1️⃣ Save SonarCloud cache
       - name: Save SonarCloud cache
         uses: actions/cache/save@v4
         with:
