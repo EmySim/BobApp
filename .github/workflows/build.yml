@@ -1,4 +1,4 @@
-name: Build and Analyze with SonarCloud
+name: Build, Test & SonarCloud Quality Analysis
 
 on:
   push:
@@ -9,16 +9,16 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  build-and-test:
-    name: Build, Test & Coverage Analysis
+  quality-analysis:
+    name: Quality Analysis with SonarCloud
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout code with full history for SonarCloud
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Full history needed for blame information
 
       # 2️⃣ Setup Java (JDK 17 for SonarQube scanner)
       - name: Set up JDK 17
@@ -36,15 +36,23 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
-      # 4️⃣ Restore Maven cache
-      - name: Restore Maven packages cache
-        uses: actions/cache/restore@v4
+      # 4️⃣ Cache SonarCloud packages
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      # 5️⃣ Cache Maven dependencies
+      - name: Cache Maven packages
+        uses: actions/cache@v3
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
-      # 5️⃣ Backend: Build and Test with Coverage
+      # 6️⃣ Backend: Build and Test with Coverage
       - name: Backend - Build and Test with Jacoco Coverage
         working-directory: back
         env:
@@ -56,10 +64,15 @@ jobs:
           echo "🧪 Running backend tests with coverage..."
           mvn test jacoco:report
           
-          echo "📊 Jacoco coverage report generated!"
-          ls -la target/site/jacoco/ || echo "No jacoco directory found"
+          echo "📊 Backend coverage generated!"
+          if [ -f "target/site/jacoco/jacoco.xml" ]; then
+            echo "✅ Jacoco XML report found"
+          else
+            echo "❌ Jacoco XML report missing"
+            exit 1
+          fi
 
-      # 6️⃣ Frontend: Install dependencies and test with coverage
+      # 7️⃣ Frontend: Install dependencies and test with coverage
       - name: Frontend - Install dependencies
         working-directory: front
         run: |
@@ -74,27 +87,69 @@ jobs:
           echo "🧪 Running frontend tests with coverage..."
           npm run test:ci
           
-          echo "📊 Frontend coverage report generated!"
-          ls -la coverage/bobapp/ || echo "No coverage directory found"
+          echo "📊 Frontend coverage generated!"
+          if [ -f "coverage/bobapp/lcov.info" ]; then
+            echo "✅ LCOV report found"
+          else
+            echo "❌ LCOV report missing"
+            exit 1
+          fi
 
-      # 7️⃣ Upload Backend Coverage to SonarCloud
-      - name: SonarCloud Analysis with Coverage
-        working-directory: back
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # 8️⃣ Verify SonarCloud Prerequisites
+      - name: Verify SonarCloud Prerequisites
         run: |
-          echo "🔍 Running SonarCloud analysis with coverage..."
-          mvn sonar:sonar \
+          echo "🔍 Checking SonarCloud prerequisites..."
+          
+          # Check backend coverage
+          if [ -f "back/target/site/jacoco/jacoco.xml" ]; then
+            echo "✅ Backend coverage: READY"
+          else
+            echo "❌ Backend coverage: MISSING"
+          fi
+          
+          # Check frontend coverage
+          if [ -f "front/coverage/bobapp/lcov.info" ]; then
+            echo "✅ Frontend coverage: READY"
+          else
+            echo "❌ Frontend coverage: MISSING"
+          fi
+          
+          # Check sonar-project.properties
+          if [ -f "sonar-project.properties" ]; then
+            echo "✅ SonarCloud config: READY"
+            echo "📄 Configuration preview:"
+            head -10 sonar-project.properties
+          else
+            echo "❌ SonarCloud config: MISSING"
+          fi
+
+      # 9️⃣ SonarCloud Analysis
+      - name: SonarCloud Analysis
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}     # SonarCloud authentication
+        run: |
+          echo "🔍 Starting SonarCloud analysis..."
+          
+          # Use SonarScanner CLI for better control
+          npx sonar-scanner \
             -Dsonar.projectKey=EmySim_BobApp \
             -Dsonar.organization=emysim \
             -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
-            -Dsonar.javascript.lcov.reportPaths=../front/coverage/bobapp/lcov.info
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.sources=back/src/main,front/src \
+            -Dsonar.tests=back/src/test,front/src \
+            -Dsonar.java.binaries=back/target/classes \
+            -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml \
+            -Dsonar.javascript.lcov.reportPaths=front/coverage/bobapp/lcov.info \
+            -Dsonar.typescript.lcov.reportPaths=front/coverage/bobapp/lcov.info \
+            -Dsonar.junit.reportPaths=back/target/surefire-reports \
+            -Dsonar.qualitygate.wait=true
 
-      # 8️⃣ Upload Coverage Reports as Artifacts
+      # 🔟 Upload Coverage Reports as Artifacts
       - name: Upload Backend Coverage Report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: backend-coverage-report
           path: back/target/site/jacoco/
@@ -102,43 +157,14 @@ jobs:
 
       - name: Upload Frontend Coverage Report
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: frontend-coverage-report
           path: front/coverage/bobapp/
           retention-days: 30
 
-      # 9️⃣ Display Coverage Summary
-      - name: Coverage Summary
+      # 1️⃣1️⃣ Quality Gate Status
+      - name: Quality Gate Status
         run: |
-          echo "📊 COVERAGE SUMMARY 📊"
-          echo "========================"
-          
-          # Backend Coverage Summary
-          if [ -f "back/target/site/jacoco/index.html" ]; then
-            echo "✅ Backend (Jacoco): Report generated"
-            echo "📁 Location: back/target/site/jacoco/"
-          else
-            echo "❌ Backend coverage report not found"
-          fi
-          
-          # Frontend Coverage Summary  
-          if [ -f "front/coverage/bobapp/index.html" ]; then
-            echo "✅ Frontend (Angular): Report generated"
-            echo "📁 Location: front/coverage/bobapp/"
-          else
-            echo "❌ Frontend coverage report not found"
-          fi
-
-      # 🔟 Save Maven cache
-      - name: Save Maven packages cache
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
-
-      # 1️⃣1️⃣ Save SonarCloud cache
-      - name: Save SonarCloud cache
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
+          echo "🎯 SonarCloud Quality Gate completed!"
+          echo "📊 View detailed results at: https://sonarcloud.io/project/overview?id=EmySim_BobApp"
