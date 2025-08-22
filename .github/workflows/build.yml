@@ -23,9 +23,10 @@ jobs:
             exit 1
           else
             echo "SONAR_TOKEN is present. Length: ${#SONAR_TOKEN}"
-          if
+          fi
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        shell: bash
 
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v5
