@@ -15,7 +15,7 @@
 	<description>L'application de jokes par excellence !</description>
 
 	<properties>
-		<java.version>11</java.version>
+		<java.version>17</java.version>
 
 		<!-- SonarCloud Configuration -->
 		<sonar.organization>emysim</sonar.organization>

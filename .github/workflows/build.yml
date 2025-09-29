@@ -36,9 +36,9 @@ jobs:
           cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
-      # 4️⃣ Restore Maven cache
-      - name: Restore Maven packages cache
-        uses: actions/cache/restore@v4
+      # 4️⃣ Setup Maven cache
+      - name: Cache Maven packages
+        uses: actions/cache@v4
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
@@ -52,10 +52,10 @@ jobs:
         run: |
           echo "🔨 Building backend..."
           mvn clean compile
-          
+
           echo "🧪 Running backend tests with coverage..."
           mvn test jacoco:report
-          
+
           echo "📊 Jacoco coverage report generated!"
           ls -la target/site/jacoco/ || echo "No jacoco directory found"
 
@@ -73,7 +73,7 @@ jobs:
         run: |
           echo "🧪 Running frontend tests with coverage..."
           npm run test:ci
-          
+
           echo "📊 Frontend coverage report generated!"
           ls -la coverage/bobapp/ || echo "No coverage directory found"
 
@@ -129,16 +129,10 @@ jobs:
             echo "❌ Frontend coverage report not found"
           fi
 
-      # 🔟 Save Maven cache
-      - name: Save Maven packages cache
-        uses: actions/cache/save@v4
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
-
-      # 1️⃣1️⃣ Save SonarCloud cache
-      - name: Save SonarCloud cache
-        uses: actions/cache/save@v4
+      # 🔟 Setup SonarCloud cache
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
         with:
           path: ~/.sonar/cache
-          key: ${{ runner.os }}-sonar
+          key: ${{ runner.os }}-sonar-${{ hashFiles('**/back/pom.xml') }}
+          restore-keys: ${{ runner.os }}-sonar

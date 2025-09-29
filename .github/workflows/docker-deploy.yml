@@ -99,7 +99,7 @@ jobs:
           echo "🧪 Testing backend image..."
           docker run --rm --name test-backend -d -p 8080:8080 ${{ env.BACKEND_IMAGE }}:latest
           sleep 30
-          
+
           # Test de santé de l'API
           response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/joke || echo "000")
           if [ "$response" = "200" ]; then
@@ -109,7 +109,7 @@ jobs:
             docker logs test-backend
             exit 1
           fi
-          
+
           docker stop test-backend
 
       - name: Test Frontend Image
@@ -117,7 +117,7 @@ jobs:
           echo "🧪 Testing frontend image..."
           docker run --rm --name test-frontend -d -p 4200:80 ${{ env.FRONTEND_IMAGE }}:latest
           sleep 10
-          
+
           # Test de santé du frontend
           response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:4200 || echo "000")
           if [ "$response" = "200" ]; then
@@ -127,7 +127,7 @@ jobs:
             docker logs test-frontend
             exit 1
           fi
-          
+
           docker stop test-frontend
 
       # 9️⃣ Mise à jour du docker-compose pour production
@@ -136,7 +136,7 @@ jobs:
           echo "📝 Generating production docker-compose.yml..."
           cat > docker-compose.prod.yml << EOF
           version: '3.8'
-          
+
           services:
             backend:
               image: ${{ env.BACKEND_IMAGE }}:latest
@@ -153,7 +153,7 @@ jobs:
                 retries: 3
                 start_period: 40s
               restart: unless-stopped
-          
+
             frontend:
               image: ${{ env.FRONTEND_IMAGE }}:latest
               container_name: bobapp-frontend-prod
@@ -163,12 +163,12 @@ jobs:
                 backend:
                   condition: service_healthy
               restart: unless-stopped
-          
+
           networks:
             default:
               name: bobapp-network-prod
           EOF
-          
+
           echo "✅ Production docker-compose.yml created"
 
       # 🔟 Notification de succès avec toutes les infos
@@ -182,7 +182,7 @@ jobs:
           echo "📦 Backend Tags:"
           echo "${{ steps.backend-meta.outputs.tags }}"
           echo ""
-          echo "📦 Frontend Tags:"  
+          echo "📦 Frontend Tags:"
           echo "${{ steps.frontend-meta.outputs.tags }}"
           echo ""
           echo "🔗 Docker Hub URLs:"

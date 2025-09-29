@@ -59,6 +59,13 @@ module.exports = function (config) {
           '--no-sandbox',
           '--disable-web-security',
           '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--disable-extensions',
+          '--no-first-run',
+          '--disable-default-apps',
+          '--disable-background-timer-throttling',
+          '--disable-renderer-backgrounding',
+          '--disable-backgrounding-occluded-windows',
           '--remote-debugging-port=9222'
         ]
       }
