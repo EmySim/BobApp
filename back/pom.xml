@@ -34,12 +34,12 @@
 
 		<!-- TypeScript Sources -->
 		<sonar.sources>
-			src/main/java,../front/src
+			back/src/main/java,front/src
 		</sonar.sources>
 
 		<!-- Tests Sources -->
 		<sonar.tests>
-			src/test/java,../front/src
+			back/src/test/java,front/src
 		</sonar.tests>
 
 		<!-- Test Inclusions -->
