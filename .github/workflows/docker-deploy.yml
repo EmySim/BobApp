@@ -53,7 +53,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       # 5️⃣ Génération des métadonnées pour Frontend
       - name: Extract metadata for Frontend
@@ -65,7 +65,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       # 6️⃣ Build et Push Backend
       - name: Build and Push Backend Image
