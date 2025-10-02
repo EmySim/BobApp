@@ -40,9 +40,9 @@
             src/main/java,../front/src
         </sonar.sources>
 
-        <!-- Tests backend + frontend -->
+        <!-- Tests backend -->
         <sonar.tests>
-            src/test/java,../front/src/app
+            src/test/java
         </sonar.tests>
 
         <!-- Plugin Versions -->
