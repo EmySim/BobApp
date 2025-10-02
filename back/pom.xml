@@ -42,7 +42,7 @@
 
         <!-- Tests backend + frontend -->
         <sonar.tests>
-            src/test/java,../front/src
+            src/test/java,../front/src/app
         </sonar.tests>
 
         <!-- Plugin Versions -->
