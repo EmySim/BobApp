@@ -42,11 +42,6 @@
 			back/src/test/java,front/src
 		</sonar.tests>
 
-		<!-- Test Inclusions -->
-		<sonar.test.inclusions>
-			**/*Test.java,**/*Tests.java,**/*.spec.ts
-		</sonar.test.inclusions>
-
 		<!-- Plugin Versions -->
 		<jacoco.version>0.8.10</jacoco.version>
 		<sonar.version>3.9.1.2184</sonar.version>
