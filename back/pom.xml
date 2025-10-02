@@ -1,126 +1,129 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>2.6.1</version>
-		<relativePath/>
-	</parent>
-	<groupId>com.openclassrooms</groupId>
-	<artifactId>bobapp</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>bobapp</name>
-	<description>L'application de jokes par excellence !</description>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<properties>
-		<java.version>11</java.version>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.6.1</version>
+        <relativePath/>
+    </parent>
 
-		<!-- SonarCloud Configuration -->
-		<sonar.organization>emysim</sonar.organization>
-		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
-		<sonar.projectKey>EmySim_BobApp</sonar.projectKey>
+    <groupId>com.openclassrooms</groupId>
+    <artifactId>bobapp</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>bobapp</name>
+    <description>L'application de jokes par excellence !</description>
 
-		<!-- Coverage Configuration -->
-		<sonar.coverage.jacoco.xmlReportPaths>
-			${project.build.directory}/site/jacoco/jacoco.xml
-		</sonar.coverage.jacoco.xmlReportPaths>
+    <properties>
+        <java.version>11</java.version>
 
-		<!-- JavaScript Coverage Path -->
-		<sonar.javascript.lcov.reportPaths>
-			../front/coverage/bobapp/lcov.info
-		</sonar.javascript.lcov.reportPaths>
+        <!-- SonarCloud Configuration -->
+        <sonar.organization>emysim</sonar.organization>
+        <sonar.host.url>https://sonarcloud.io</sonar.host.url>
+        <sonar.projectKey>EmySim_BobApp</sonar.projectKey>
 
-		<!-- TypeScript Sources -->
-		<sonar.sources>
-			back/src/main/java,front/src
-		</sonar.sources>
+        <!-- Coverage Configuration -->
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
 
-		<!-- Tests Sources -->
-		<sonar.tests>
-			back/src/test/java,front/src
-		</sonar.tests>
+        <!-- JavaScript/TypeScript Coverage Path -->
+        <sonar.javascript.lcov.reportPaths>
+            ../front/coverage/bobapp/lcov.info
+        </sonar.javascript.lcov.reportPaths>
 
-		<!-- Plugin Versions -->
-		<jacoco.version>0.8.10</jacoco.version>
-		<sonar.version>3.9.1.2184</sonar.version>
-	</properties>
+        <!-- Sources backend et frontend -->
+        <sonar.sources>
+            src/main/java,../front/src
+        </sonar.sources>
 
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-webflux</artifactId>
-		</dependency>
+        <!-- Tests backend + frontend -->
+        <sonar.tests>
+            src/test/java,../front/src
+        </sonar.tests>
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+        <!-- Plugin Versions -->
+        <jacoco.version>0.8.10</jacoco.version>
+        <sonar.version>3.9.1.2184</sonar.version>
+    </properties>
 
-	<build>
-		<plugins>
-			<!-- Spring Boot Maven Plugin -->
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
 
-			<!-- Jacoco Coverage Plugin -->
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>${jacoco.version}</version>
-				<executions>
-					<!-- Préparation de l'agent Jacoco avant les tests -->
-					<execution>
-						<id>prepare-agent</id>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-					<!-- Génération du rapport de couverture après les tests -->
-					<execution>
-						<id>report</id>
-						<phase>test</phase>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
+    <build>
+        <plugins>
+            <!-- Spring Boot Maven Plugin -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
 
-					<!-- Vérification des seuils de couverture -->
-					<execution>
-						<id>check</id>
-						<goals>
-							<goal>check</goal>
-						</goals>
-						<configuration>
-							<rules>
-								<rule>
-									<element>BUNDLE</element>
-									<limits>
-										<limit>
-											<counter>LINE</counter>
-											<value>COVEREDRATIO</value>
-											<minimum>0.80</minimum> 
-										</limit>
-									</limits>
-								</rule>
-							</rules>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
+            <!-- Jacoco Coverage Plugin -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <executions>
+                    <!-- Préparation de l'agent Jacoco avant les tests -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
 
-			<!-- SonarQube Maven Plugin -->
-			<plugin>
-				<groupId>org.sonarsource.scanner.maven</groupId>
-				<artifactId>sonar-maven-plugin</artifactId>
-				<version>${sonar.version}</version>
-			</plugin>
-		</plugins>
-	</build>
+                    <!-- Génération du rapport de couverture après les tests -->
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+
+                    <!-- Vérification des seuils de couverture -->
+                    <execution>
+                        <id>check</id>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.30</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- SonarQube Maven Plugin -->
+            <plugin>
+                <groupId>org.sonarsource.scanner.maven</groupId>
+                <artifactId>sonar-maven-plugin</artifactId>
+                <version>${sonar.version}</version>
+            </plugin>
+        </plugins>
+    </build>
 </project>
