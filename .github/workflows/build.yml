@@ -114,7 +114,8 @@ jobs:
             -Dsonar.sources=src,../front/src \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
             -Dsonar.javascript.lcov.reportPaths=../front/coverage/bobapp/lcov.info \
-            -Dsonar.tests=src/test/java,../front/src/**/*.spec.ts,../front/src/**/*.test.ts
+            -Dsonar.tests=src/test/java,../front/src \
+            -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts
 
       # 9️⃣ Upload Coverage Reports as Artifacts
       - name: Upload Backend Coverage Report
