@@ -77,7 +77,29 @@ jobs:
           echo "📊 Frontend coverage report generated!"
           ls -la coverage/bobapp/ || echo "No coverage directory found"
 
-      # 7️⃣ Upload Backend Coverage to SonarCloud (CHEMIN CORRIGÉ)
+      # 7️⃣ SonarQube CLI Analysis for Frontend
+      - name: Download SonarQube Scanner CLI
+        run: |
+          wget https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+          unzip sonar-scanner-cli-5.0.1.3006-linux.zip
+
+      - name: SonarQube Analysis Frontend
+        working-directory: front
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ../sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
+            -Dsonar.projectKey=EmySim_BobApp \
+            -Dsonar.organization=emysim \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.sources=src \
+            -Dsonar.tests=src \
+            -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts \
+            -Dsonar.exclusions=src/**/*.spec.ts,src/**/*.test.ts \
+            -Dsonar.javascript.lcov.reportPaths=coverage/bobapp/lcov.info \
+            -Dsonar.login=${SONAR_TOKEN}
+
+      # 8️⃣ Upload Backend Coverage to SonarCloud
       - name: SonarCloud Analysis with Coverage
         working-directory: back
         env:
@@ -89,10 +111,13 @@ jobs:
             -Dsonar.projectKey=EmySim_BobApp \
             -Dsonar.organization=emysim \
             -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.sources=src,../front/src \
             -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
-            -Dsonar.javascript.lcov.reportPaths=../front/coverage/bobapp/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=../front/coverage/bobapp/lcov.info \
+            -Dsonar.tests=src/test/java,../front/src \
+            -Dsonar.test.inclusions=**/*.spec.ts,**/*.test.ts
 
-      # 8️⃣ Upload Coverage Reports as Artifacts
+      # 9️⃣ Upload Coverage Reports as Artifacts
       - name: Upload Backend Coverage Report
         uses: actions/upload-artifact@v4
         with:
@@ -107,7 +132,7 @@ jobs:
           path: front/coverage/bobapp/
           retention-days: 30
 
-      # 9️⃣ Display Coverage Summary
+      # 10 Display Coverage Summary
       - name: Coverage Summary
         run: |
           echo "📊 COVERAGE SUMMARY 📊"
