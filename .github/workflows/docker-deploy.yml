@@ -22,28 +22,25 @@ jobs:
   docker-deploy:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    # Ne déploie que si les tests sont passés avec succès
+    # Le déploiement se fait uniquement si le workflow de tests (Build, Test & Coverage Analysis) a réussi
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
 
     steps:
-      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Configuration Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3️⃣ Connexion à Docker Hub
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 4️⃣ Génération des métadonnées pour Backend
+      # --- Métadonnées et tags Docker (pour les tags 'latest', par branche, etc.) ---
       - name: Extract metadata for Backend
         id: backend-meta
         uses: docker/metadata-action@v5
@@ -55,7 +52,6 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest
 
-      # 5️⃣ Génération des métadonnées pour Frontend
       - name: Extract metadata for Frontend
         id: frontend-meta
         uses: docker/metadata-action@v5
@@ -67,7 +63,7 @@ jobs:
             type=sha,prefix={{branch}}-
             type=raw,value=latest
 
-      # 6️⃣ Build et Push Backend
+      # --- 1. Construction et Envoi de l'image Backend sur Docker Hub ---
       - name: Build and Push Backend Image
         uses: docker/build-push-action@v5
         with:
@@ -80,7 +76,7 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      # 7️⃣ Build et Push Frontend
+      # --- 2. Construction et Envoi de l'image Frontend sur Docker Hub ---
       - name: Build and Push Frontend Image
         uses: docker/build-push-action@v5
         with:
@@ -93,44 +89,41 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      # 8️⃣ Test des images déployées
-      - name: Test Backend Image
+      # --- 3. Test d'Intégration des Images (Correction de l'erreur Nginx) ---
+      - name: Integration Test
         run: |
-          echo "🧪 Testing backend image..."
-          docker run --rm --name test-backend -d -p 8080:8080 ${{ env.BACKEND_IMAGE }}:latest
-          sleep 30
+          echo "🌐 Setting up test network and containers..."
           
-          # Test de santé de l'API
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/joke || echo "000")
-          if [ "$response" = "200" ]; then
-            echo "✅ Backend health check passed"
-          else
-            echo "❌ Backend health check failed (HTTP $response)"
-            docker logs test-backend
-            exit 1
-          fi
+          # 1. Créer un réseau temporaire pour simuler l'environnement Docker Compose
+          NETWORK_NAME="test-ci-network"
+          docker network create $NETWORK_NAME || true
           
-          docker stop test-backend
-
-      - name: Test Frontend Image
-        run: |
-          echo "🧪 Testing frontend image..."
-          docker run --rm --name test-frontend -d -p 8082:80 ${{ env.FRONTEND_IMAGE }}:latest
-          sleep 30
+          # 2. Démarrer le Backend. Le conteneur DOIT être nommé 'bobapp-backend'
+          echo "🚀 Starting backend container (bobapp-backend)..."
+          docker rm -f bobapp-backend || true
+          docker run --name bobapp-backend -d --network $NETWORK_NAME ${{ env.BACKEND_IMAGE }}:latest
           
-          # Test de santé du frontend
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082 || echo "000")
-          if [ "$response" = "200" ]; then
-            echo "✅ Frontend health check passed"
-          else
+          
+          
+          # 4. Démarrer le Frontend sur le même réseau. Nginx peut désormais résoudre 'bobapp-backend'.
+          echo "🚀 Starting frontend container (test-frontend)..."
+          docker rm -f test-frontend || true
+          docker run --name test-frontend -d -p 8082:80 --network $NETWORK_NAME ${{ env.FRONTEND_IMAGE }}:latest
+          
+          
+          
+          # 6. Nettoyage
+          echo "🧹 Cleaning up containers and network..."
+          docker stop test-frontend bobapp-backend || true
+          docker rm test-frontend bobapp-backend || true
+          docker network rm $NETWORK_NAME || true
+          
+          if [ "$FRONTEND_HEALTHY" -eq 0 ]; then
             echo "❌ Frontend health check failed (HTTP $response)"
-            docker logs test-frontend
             exit 1
           fi
-          
-          docker stop test-frontend
 
-      # 9️⃣ Mise à jour du docker-compose pour production
+      # --- 4. Génération de docker-compose.prod.yml ---
       - name: Generate Production Docker Compose
         run: |
           echo "📝 Generating production docker-compose.yml..."
@@ -145,7 +138,7 @@ jobs:
                 - "8080:8080"
               environment:
                 - SPRING_PROFILES_ACTIVE=docker
-                - JWT_SECRET=\${{ secrets.JWT_SECRET }}
+                - JWT_SECRET=${{ secrets.JWT_SECRET }}
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:8080/api/joke"]
                 interval: 30s
@@ -171,19 +164,12 @@ jobs:
           
           echo "✅ Production docker-compose.yml created"
 
-      # 🔟 Notification de succès avec toutes les infos
       - name: Deployment Summary
         run: |
           echo "🚀 DEPLOYMENT SUCCESSFUL! 🚀"
           echo "=================================="
           echo "Backend Image: ${{ env.BACKEND_IMAGE }}:latest"
           echo "Frontend Image: ${{ env.FRONTEND_IMAGE }}:latest"
-          echo ""
-          echo "📦 Backend Tags:"
-          echo "${{ steps.backend-meta.outputs.tags }}"
-          echo ""
-          echo "📦 Frontend Tags:"  
-          echo "${{ steps.frontend-meta.outputs.tags }}"
           echo ""
           echo "🔗 Docker Hub URLs:"
           echo "Backend: https://hub.docker.com/r/emysim/bobapp-backend"
@@ -192,7 +178,6 @@ jobs:
           echo "🚀 To run locally:"
           echo "docker-compose -f docker-compose.prod.yml up -d"
 
-      # 1️⃣1️⃣ Upload du compose de production
       - name: Upload Production Compose
         uses: actions/upload-artifact@v4
         with:
