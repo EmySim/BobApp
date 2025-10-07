@@ -52,20 +52,16 @@ jobs:
         run: |
           echo "🔨 Building backend..."
           mvn clean compile
-
           echo "🧪 Running backend tests with coverage..."
           mvn test jacoco:report
-
           echo "📊 Jacoco coverage report generated!"
           ls -la target/site/jacoco/ || echo "No jacoco directory found"
-
       # 6️⃣ Frontend: Install dependencies and test with coverage
       - name: Frontend - Install dependencies
         working-directory: front
         run: |
           echo "📦 Installing frontend dependencies..."
           npm ci
-
       - name: Frontend - Run tests with coverage
         working-directory: front
         env:
@@ -73,17 +69,17 @@ jobs:
         run: |
           echo "🧪 Running frontend tests with coverage..."
           npm run test:ci
-
           echo "📊 Frontend coverage report generated!"
           ls -la coverage/bobapp/ || echo "No coverage directory found"
-
       # 7️⃣ SonarCloud Analysis (Monorepo: Front + Back)
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
-          projectBaseDir: .
+          projectBaseDir: "."   
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: "EmySim_BobApp"
+          SONAR_ORGANIZATION: "emysim"
 
       # 8️⃣ Upload Coverage Reports as Artifacts
       - name: Upload Backend Coverage Report
@@ -105,21 +101,18 @@ jobs:
         run: |
           echo "📊 COVERAGE SUMMARY 📊"
           echo "========================"
-
           if [ -f "back/target/site/jacoco/index.html" ]; then
             echo "✅ Backend (Jacoco): Report generated"
             echo "📁 Location: back/target/site/jacoco/"
           else
             echo "❌ Backend coverage report not found"
           fi
-
           if [ -f "front/coverage/bobapp/index.html" ]; then
             echo "✅ Frontend (Angular): Report generated"
             echo "📁 Location: front/coverage/bobapp/"
           else
             echo "❌ Frontend coverage report not found"
           fi
-
       # 🔟 Save Maven cache
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
