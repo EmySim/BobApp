@@ -76,10 +76,11 @@ jobs:
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: "."   
+          args: >
+            -Dsonar.projectKey=EmySim_BobApp 
+            -Dsonar.organization=emysim
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_PROJECT_KEY: "EmySim_BobApp"
-          SONAR_ORGANIZATION: "emysim"
 
       # 8️⃣ Upload Coverage Reports as Artifacts
       - name: Upload Backend Coverage Report
