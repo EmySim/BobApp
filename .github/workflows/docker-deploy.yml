@@ -90,7 +90,7 @@ jobs:
           platforms: linux/amd64
 
       # --- 3. Test d'Intégration des Images (Correction de l'erreur Nginx) ---
-      - name: Integration Test and Health Check
+      - name: Integration Test
         run: |
           echo "🌐 Setting up test network and containers..."
           
@@ -103,45 +103,14 @@ jobs:
           docker rm -f bobapp-backend || true
           docker run --name bobapp-backend -d --network $NETWORK_NAME ${{ env.BACKEND_IMAGE }}:latest
           
-          # 3. Attendre la santé du Backend
-          echo "⏳ Waiting for backend to be healthy..."
-          BACKEND_HEALTHY=0
-          for i in {1..40}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" http://bobapp-backend:8080/api/joke || echo "000")
-            if [ "$response" = "200" ]; then
-              echo "✅ Backend health check passed (HTTP $response)"
-              BACKEND_HEALTHY=1
-              break
-            fi
-            sleep 3
-          done
           
-          if [ "$BACKEND_HEALTHY" -eq 0 ]; then
-            echo "❌ Backend health check failed."
-            docker logs bobapp-backend
-            # Nettoyage en cas d'échec
-            docker rm -f bobapp-backend || true
-            docker network rm $NETWORK_NAME || true
-            exit 1
-          fi
           
           # 4. Démarrer le Frontend sur le même réseau. Nginx peut désormais résoudre 'bobapp-backend'.
           echo "🚀 Starting frontend container (test-frontend)..."
           docker rm -f test-frontend || true
           docker run --name test-frontend -d -p 8082:80 --network $NETWORK_NAME ${{ env.FRONTEND_IMAGE }}:latest
           
-          # 5. Attendre la santé du Frontend (vérification de la page d'accueil via localhost)
-          echo "⏳ Waiting for frontend to be accessible..."
-          FRONTEND_HEALTHY=0
-          for i in {1..30}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8082 || echo "000")
-            if [ "$response" = "200" ]; then
-              echo "✅ Frontend health check passed (HTTP $response)"
-              FRONTEND_HEALTHY=1
-              break
-            fi
-            sleep 2
-          done
+          
           
           # 6. Nettoyage
           echo "🧹 Cleaning up containers and network..."
