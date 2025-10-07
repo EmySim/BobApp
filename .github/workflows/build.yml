@@ -77,7 +77,7 @@ jobs:
           echo "📊 Frontend coverage report generated!"
           ls -la coverage/bobapp/ || echo "No coverage directory found"
 
-      # 7️⃣ SonarCloud Analysis (Monorepo: Front + Back) — correction ici
+      # 7️⃣ SonarCloud Analysis (Monorepo: Front + Back)
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
