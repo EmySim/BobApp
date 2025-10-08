@@ -94,7 +94,6 @@ jobs:
         with:
           projectBaseDir: "."
           args: >
-            # Ces arguments forcent les clés d'identification, résolvant l'erreur "Project not found"
             -Dsonar.projectKey=emysim_BobApp 
             -Dsonar.organization=emysim
         env:
