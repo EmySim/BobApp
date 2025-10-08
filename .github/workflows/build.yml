@@ -98,7 +98,6 @@ jobs:
             -Dsonar.projectKey=emysim_BobApp 
             -Dsonar.organization=emysim
         env:
-          # Le nouveau token régénéré !
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           
       # --- Post-Analyse et Nettoyage ---
