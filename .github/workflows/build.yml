@@ -7,6 +7,9 @@ on:
       - main
   pull_request:
     types: [opened, synchronize, reopened]
+    branches:
+      - develop
+      - main
 
 jobs:
   build-and-test:
@@ -18,112 +21,112 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          # Crucial pour l'analyse des PR et du "New Code" par SonarCloud
+          fetch-depth: 0 
 
-      # 2️⃣ Setup Java (JDK 17 for SonarQube scanner)
+      # --- Configuration des environnements ---
+      
+      # 2️⃣ Setup Java (JDK 17 for Maven and SonarScanner)
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'maven'
-
+          # Le cache Maven est mieux géré par l'étape 4 pour plus de flexibilité
+          
       # 3️⃣ Setup Node.js for Frontend
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          # Utilisation du cache intégré pour les modules NPM
           cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
-      # 4️⃣ Restore Maven cache
+      # 4️⃣ Restore Maven cache (Déplacé après le setup Java)
       - name: Restore Maven packages cache
         uses: actions/cache/restore@v4
         with:
           path: ~/.m2
+          # Utilisation de la date comme clé si le pom.xml n'a pas changé pour garantir un restore plus rapide
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
 
+      # --- Préparation et Tests du Monorepo ---
+      
       # 5️⃣ Backend: Build and Test with Coverage
       - name: Backend - Build and Test with Jacoco Coverage
         working-directory: back
+        # Important : Assurez-vous que le secret JWT_SECRET est configuré si les tests en ont besoin
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           echo "🔨 Building backend..."
-          mvn clean compile
+          # Clean, Compile, Test, et générer le rapport Jacoco
+          mvn clean install -DskipTests=true
           echo "🧪 Running backend tests with coverage..."
+          # Exécute les tests et génère le rapport jacoco.xml nécessaire pour SonarCloud
           mvn test jacoco:report
-          echo "📊 Jacoco coverage report generated!"
-          ls -la target/site/jacoco/ || echo "No jacoco directory found"
+          echo "📊 Jacoco coverage report generated in target/site/jacoco/"
+
       # 6️⃣ Frontend: Install dependencies and test with coverage
+      # NPM Install
       - name: Frontend - Install dependencies
         working-directory: front
-        run: |
-          echo "📦 Installing frontend dependencies..."
-          npm ci
+        run: npm ci
+        
+      # Run Tests
       - name: Frontend - Run tests with coverage
         working-directory: front
         env:
           CI: true
         run: |
           echo "🧪 Running frontend tests with coverage..."
+          # Votre script NPM doit générer le rapport LCOV dans front/coverage/bobapp/
           npm run test:ci
-          echo "📊 Frontend coverage report generated!"
-          ls -la coverage/bobapp/ || echo "No coverage directory found"
+          echo "📊 LCOV coverage report generated!"
+
+      # --- Analyse de Qualité ---
+      
       # 7️⃣ SonarCloud Analysis (Monorepo: Front + Back)
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
-          projectBaseDir: "."   
+          # Indique au scanner de commencer à la racine pour lire le sonar-project.properties
+          projectBaseDir: "."
           args: >
-            -Dsonar.projectKey=EmySim_BobApp 
+            # Ces arguments forcent les clés d'identification, résolvant l'erreur "Project not found"
+            -Dsonar.projectKey=emysim_BobApp 
             -Dsonar.organization=emysim
         env:
+          # Le nouveau token régénéré !
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-
-      # 8️⃣ Upload Coverage Reports as Artifacts
-      - name: Upload Backend Coverage Report
+          
+      # --- Post-Analyse et Nettoyage ---
+      
+      # 8️⃣ Upload Coverage Reports as Artifacts (Pour inspection manuelle)
+      - name: Upload Coverage Reports Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage-report
-          path: back/target/site/jacoco/
+          name: coverage-reports
+          # Grouper les deux chemins pour un seul upload
+          path: |
+            back/target/site/jacoco/
+            front/coverage/bobapp/
           retention-days: 30
-
-      - name: Upload Frontend Coverage Report
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-coverage-report
-          path: front/coverage/bobapp/
-          retention-days: 30
-
-      # 9️⃣ Display Coverage Summary
-      - name: Coverage Summary
-        run: |
-          echo "📊 COVERAGE SUMMARY 📊"
-          echo "========================"
-          if [ -f "back/target/site/jacoco/index.html" ]; then
-            echo "✅ Backend (Jacoco): Report generated"
-            echo "📁 Location: back/target/site/jacoco/"
-          else
-            echo "❌ Backend coverage report not found"
-          fi
-          if [ -f "front/coverage/bobapp/index.html" ]; then
-            echo "✅ Frontend (Angular): Report generated"
-            echo "📁 Location: front/coverage/bobapp/"
-          else
-            echo "❌ Frontend coverage report not found"
-          fi
-      # 🔟 Save Maven cache
+          
+      # 9️⃣ Save Maven cache (Doit être la dernière utilisation de la cache pour être sauvegardée)
       - name: Save Maven packages cache
         uses: actions/cache/save@v4
+        if: always() # Toujours exécuter pour ne pas perdre le cache
         with:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('**/back/pom.xml') }}
-
-      # 1️⃣1️⃣ Save SonarCloud cache
+          
+      # 🔟 Save SonarCloud cache (Pour accélérer les scans futurs)
       - name: Save SonarCloud cache
         uses: actions/cache/save@v4
+        if: always()
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
