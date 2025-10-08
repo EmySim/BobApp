@@ -92,7 +92,6 @@ jobs:
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v2
         with:
-          # Indique au scanner de commencer à la racine pour lire le sonar-project.properties
           projectBaseDir: "."
           args: >
             # Ces arguments forcent les clés d'identification, résolvant l'erreur "Project not found"
