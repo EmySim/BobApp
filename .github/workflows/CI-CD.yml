@@ -14,7 +14,7 @@ env:
 jobs:
   ci-cd:
     name: Build, Test, Analyze & Deploy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # ou ubuntu-24.04 selon tes besoins
 
     steps:
       # 1. Checkout du code source
@@ -35,8 +35,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'front/package-lock.json'
 
-      # 3b. Cache npm explicite pour éviter la dépréciation
+      # 4. Cache Node modules
       - name: Cache Node modules
         uses: actions/cache@v4
         with:
@@ -45,7 +47,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      # 4. Build et test du backend avec Jacoco
+      # 5. Build et test du backend avec Jacoco
       - name: Backend - Build and Test
         working-directory: back
         env:
@@ -54,7 +56,7 @@ jobs:
           mvn clean install -DskipTests=true
           mvn test jacoco:report
 
-      # 5. Build et test du frontend
+      # 6. Build et test du frontend
       - name: Frontend - Install dependencies
         working-directory: front
         run: npm ci
@@ -65,7 +67,7 @@ jobs:
           CI: true
         run: npm run test:ci
 
-      # 6. Analyse SonarCloud
+      # 7. Analyse SonarCloud
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@v4
         with:
@@ -77,16 +79,35 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # 7. Vérification du Quality Gate SonarCloud
+      # 8. Installer jq pour le parsing JSON
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 9. Vérification du Quality Gate SonarCloud via l'API
       - name: SonarCloud Quality Gate Check
         id: qualitygate
-        uses: SonarSource/sonarqube-scan-action@v4.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          PROJECT_KEY="emysim_BobApp"
+          ANALYSIS_ID=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" | jq -r '.queue[0].id')
+          for i in {1..30}; do
+            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/task?id=$ANALYSIS_ID" | jq -r '.task.status')
+            if [ "$STATUS" == "SUCCESS" ]; then
+              break
+            fi
+            sleep 5
+          done
+          QUALITY_GATE_STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+          echo "::set-output name=passed::$QUALITY_GATE_STATUS"
+          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
+            exit 1
+          fi
 
-      # 8. Déploiement Docker si Quality Gate OK
+      # 10. Déploiement Docker si Quality Gate OK
       - name: Build & Push Docker Images
-        if: steps.qualitygate.outputs.passed == 'true'
+        if: steps.qualitygate.outputs.passed == 'OK'
         run: |
           echo "Quality Gate OK, déploiement Docker..."
           docker login -u $DOCKERHUB_USERNAME -p ${{ secrets.DOCKERHUB_TOKEN }}
@@ -95,17 +116,17 @@ jobs:
           docker build -t $FRONTEND_IMAGE:latest ./front
           docker push $FRONTEND_IMAGE:latest
 
-      # 9. Résumé du déploiement
+      # 11. Résumé du déploiement
       - name: Deployment Summary
-        if: steps.qualitygate.outputs.passed == 'true'
+        if: steps.qualitygate.outputs.passed == 'OK'
         run: |
           echo "Déploiement réussi !"
           echo "Backend Image: $BACKEND_IMAGE:latest"
           echo "Frontend Image: $FRONTEND_IMAGE:latest"
 
-      # 10. Echec Quality Gate
+      # 12. Echec Quality Gate
       - name: Quality Gate Failed
-        if: steps.qualitygate.outputs.passed != 'true'
+        if: steps.qualitygate.outputs.passed != 'OK'
         run: |
           echo "Quality Gate non validée, déploiement annulé."
           exit 1
