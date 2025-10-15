@@ -34,9 +34,10 @@ jobs:
 
       # 3. Setup Node.js 18 pour le frontend
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '18'
+          cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
       # 4. Cache Node modules
