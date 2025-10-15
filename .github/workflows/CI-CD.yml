@@ -14,7 +14,7 @@ env:
 jobs:
   ci-cd:
     name: Build, Test, Analyze & Deploy
-    runs-on: ubuntu-22.04 # ou ubuntu-24.04 selon tes besoins
+    runs-on: ubuntu-latest
 
     steps:
       # 1. Checkout du code source
@@ -22,6 +22,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+ # --- Configuration des environnements ---
 
       # 2. Setup JDK 17 pour le backend
       - name: Set up JDK 17
@@ -47,6 +49,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
+# --- Préparation et Tests du Monorepo ---
+
       # 5. Build et test du backend avec Jacoco
       - name: Backend - Build and Test
         working-directory: back
@@ -66,6 +70,8 @@ jobs:
         env:
           CI: true
         run: npm run test:ci
+        
+# --- Analyse de Qualité ---
 
       # 7. Analyse SonarCloud
       - name: SonarCloud Scan
