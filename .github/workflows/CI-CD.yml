@@ -35,8 +35,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'front/package-lock.json'
+
+      # 3b. Cache npm explicite pour éviter la dépréciation
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: front/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       # 4. Build et test du backend avec Jacoco
       - name: Backend - Build and Test
@@ -100,5 +107,5 @@ jobs:
       - name: Quality Gate Failed
         if: steps.qualitygate.outputs.passed != 'true'
         run: |
-          echo "Quality Gate non validé, déploiement annulé."
+          echo "Quality Gate non validée, déploiement annulé."
           exit 1
