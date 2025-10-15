@@ -73,7 +73,7 @@ jobs:
       # 7. Vérification du Quality Gate SonarCloud
       - name: SonarCloud Quality Gate Check
         id: qualitygate
-        uses: SonarSource/sonarqube-scan-action@v4
+        uses: SonarSource/sonarqube-scan-action@v4.1.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
