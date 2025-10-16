@@ -1,4 +1,5 @@
-# BobApp 🚀  
+# BobApp 
+
 Collaborative joke application, composed of an Angular front-end and a Spring Boot back-end.
 
 ##  Prerequisites
@@ -37,18 +38,20 @@ Collaborative joke application, composed of an Angular front-end and a Spring Bo
 
 ###  Containerization
 
-<a href="https://docs.docker.com/compose/">
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker Compose" />
+<a href="https://www.docker.com/">
+  <img src="https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker" />
 </a><br/>
 
-- [Docker](https://www.docker.com/)
+<a href="https://docs.docker.com/compose/">
+  <img src="https://img.shields.io/badge/Docker%20Compose-1.29+-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker Compose" />
+</a><br/>
 
 ---
 
-###  CI / Quality / Licence
+###  CI/CD / Quality 
 
 <a href="https://github.com/EmySim/BobApp/actions">
-  <img src="https://img.shields.io/github/workflow/status/EmySim/BobApp/CI%2FCD%20Pipeline?label=CI%2FCD&logo=githubactions&style=for-the-badge" alt="CI/CD" />
+  <img src="https://img.shields.io/github/actions/workflow/status/EmySim/BobApp/CI-CD.yml?branch=main&label=CI%2FCD&logo=githubactions&style=for-the-badge" alt="CI/CD" />
 </a><br/>
 
 <a href="https://sonarcloud.io/">
