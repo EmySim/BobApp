@@ -1,7 +1,7 @@
 # BobApp 🚀  
 Collaborative joke application, composed of an Angular front-end and a Spring Boot back-end.
 
-## 🛠️ Prerequisites & Tech Stack
+## Tech Stack
 
 <p>
   <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white&style=for-the-badge" />
@@ -14,8 +14,9 @@ Collaborative joke application, composed of an Angular front-end and a Spring Bo
   <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white&style=for-the-badge" />
   <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" />
   <img src="https://img.shields.io/github/workflow/status/EmySim/BobApp/CI%2FCD%20Pipeline?label=CI%2FCD&logo=githubactions&style=for-the-badge" />
-  <img src="https://img.shields.io/github/license/EmySim/BobApp?style=for-the-badge" />
 </p>
+
+## Prerequisites 
 
 **Front-end**  
 - [Node.js](https://nodejs.org/) ≥ 18.x  
