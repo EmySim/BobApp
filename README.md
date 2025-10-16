@@ -1,27 +1,34 @@
-# BobApp
-
+# BobApp 🚀  
 Collaborative joke application, composed of an Angular front-end and a Spring Boot back-end.
 
+<p align="center">
+  <img src="https://img.shields.io/github/workflow/status/EmySim/BobApp/CI%2FCD%20Pipeline?label=CI%2FCD&logo=githubactions&style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/EmySim/BobApp?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Angular-18+-dd0031?logo=angular&logoColor=white&style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white&style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white&style=for-the-badge" />
+  <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" />
+</p>
+
 ---
 
-## Prerequisites
+##  Prerequisites
 
-for the front-end : Node.js ≥ 18.x
-- [Node.js](https://nodejs.org/) 
-- npm ou yarn
+**Front-end**  
+- [Node.js](https://nodejs.org/) ≥ 18.x  
+- npm or yarn
 
-for the back-end : 
-- Java ≥ 17 (JDK)
+**Back-end**  
+- Java ≥ 11 (JDK)  
 - [Maven](https://maven.apache.org/)
 
-For containerization
-- [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/)
+**Containerization**  
+- [Docker](https://www.docker.com/) & [Docker Compose](https://docs.docker.com/compose/)
 
 ---
 
-## Clone the project
+##  Clone the project
 
-> Clone the repository:
 ```bash
 git clone https://github.com/EmySim/BobApp.git
 cd Gerez-un-projet-collaboratif-en-int-grant-une-demarche-CI-CD-main
@@ -29,45 +36,29 @@ cd Gerez-un-projet-collaboratif-en-int-grant-une-demarche-CI-CD-main
 
 ---
 
-## Run with Docker Compose (recommended)
+##  Run with Docker Compose (recommended)
 
-> Build and start all services:
 ```bash
 docker-compose up --build
 ```
-- The front-end will be available at [http://localhost:8082](http://localhost:8082)
-- The back-end will be available at [http://localhost:8080](http://localhost:8080)
+- Front-end: [http://localhost:8082](http://localhost:8082)
+- Back-end: [http://localhost:8080](http://localhost:8080)
 
 ---
 
-## Manual Start
+##  Manual Start
 
 ### Front-end
 
-> Go inside the front folder:
 ```bash
 cd front
-```
-
-> Install dependencies:
-```bash
 npm install
-```
-
-> Launch the front-end:
-```bash
 npm run start
 ```
 
 #### Docker (front)
-
-> Build the container:
 ```bash
 docker build -t bobapp-front .
-```
-
-> Start the container:
-```bash
 docker run -p 8082:80 --name bobapp-front -d bobapp-front
 ```
 
@@ -75,48 +66,29 @@ docker run -p 8082:80 --name bobapp-front -d bobapp-front
 
 ### Back-end
 
-> Go inside the back folder:
 ```bash
 cd back
-```
-
-> Install dependencies:
-```bash
 mvn clean install
-```
-
-> Launch the back-end:
-```bash
 mvn spring-boot:run
 ```
 
 #### Docker (back)
-
-> Build the container:
 ```bash
 docker build -t bobapp-back .
-```
-
-> Start the container:
-```bash
 docker run -p 8080:8080 --name bobapp-back -d bobapp-back
 ```
 
 ---
 
-## Tests
+##  Tests
 
 ### Front-end
-
-> Run front-end tests:
 ```bash
 cd front
 npm run test
 ```
 
 ### Back-end
-
-> Run back-end tests:
 ```bash
 cd back
 mvn test
@@ -124,32 +96,33 @@ mvn test
 
 ---
 
-## Quality Analysis (SonarCloud)
+##  Quality Analysis (SonarCloud)
 
-> Configure your SonarCloud environment variables if needed, then run:
+Configure your SonarCloud environment variables if needed, then run:
 ```bash
 mvn sonar:sonar
 ```
 
 ---
 
-## Project Structure
+##  Project Structure
 
-- `front/` : Angular application
-- `back/` : Spring Boot API
-- `docker-compose.yml` : Service orchestration
-- `sonar-project.properties` : SonarCloud configuration
+```
+front/                  # Angular application
+back/                   # Spring Boot API
+docker-compose.yml      # Service orchestration
+sonar-project.properties# SonarCloud configuration
+.github/workflows/ci.yml# CI/CD pipeline
+```
 
 ---
 
-## CI/CD Workflows
+##  CI/CD Workflows
 
-This project uses GitHub Actions for CI/CD automation:
+This project uses **GitHub Actions** for CI/CD automation.
 
-- **Build**: Compile front-end and back-end on each push or pull request.
-- **Tests**: Run unit tests for Angular and Spring Boot.
-- **SonarCloud Analysis**: Code quality and coverage analysis.
-- **Docker**: Build and publish Docker images if needed.
+- **Continuous Integration (CI):** Unit tests, coverage, SonarCloud Quality Gate.
+- **Continuous Delivery (CD):** Docker Hub deployment (only if CI passes).
 
 > Example workflow file (`.github/workflows/ci.yml`):
 
@@ -163,59 +136,90 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      # Set up Node.js for front-end
+      # ---------------------- CI STEPS: BUILD & TEST ----------------------
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
 
-      # Install front-end dependencies
-      - name: Install front dependencies
-        run: |
-          cd front
-          npm install
-
-      # Run front-end tests
       - name: Run front tests
         run: |
           cd front
-          npm run test -- --watch=false
-
-      # Set up JDK 11 for back-end
+          npm install
+          npm run test -- --watch=false --browsers=ChromeHeadless
+      
       - name: Set up JDK 11
         uses: actions/setup-java@v3
         with:
           java-version: '11'
           distribution: 'adopt'
 
-      # Build and test back-end
       - name: Build and test back
         run: |
           cd back
           mvn clean install
-
-      # SonarCloud analysis
-      - name: SonarCloud Scan
+      
+      - name: SonarCloud Scan & Quality Gate Check
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: .
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # Build Docker images
+      # ---------------------- CD STEPS: DOCKER BUILD & PUSH ----------------------
       - name: Build Docker images
         run: docker-compose build
+
+      - name: Docker Login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Push to Docker Hub
+        run: |
+          docker push emysim/bobapp-frontend
+          docker push emysim/bobapp-backend
 ```
 
-> To enable CI/CD, create the above file in `.github/workflows/ci.yml` and configure the required secrets (e.g., `SONAR_TOKEN`).
+**Required configuration:**  
+Create the above file in `.github/workflows/ci.yml` and configure the secrets in your GitHub repository settings (`SONAR_TOKEN`, `DOCKER_USERNAME`, `DOCKER_PASSWORD`).
 
 ---
 
-## Author
+##  Contributing
 
-OpenClassrooms Project – BobApp
+If you want to contribute to the project, follow these steps:
+
+1. **Fork** the repository on GitHub.
+2. **Clone** your fork locally:
+   ```bash
+   git clone https://github.com/your-username/BobApp.git
+   ```
+3. **Create a new branch** for your feature or fix:
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+4. **Make your changes** and commit them with clear messages.
+5. **Push** your branch to your fork:
+   ```bash
+   git push origin feature/my-feature
+   ```
+6. **Open a Pull Request** on the main repository and describe your changes.
+
+Please make sure to:
+- Follow the existing code style and conventions.
+- Write unit tests for new features or bug fixes.
+- Wait for the CI/CD pipeline to pass (tests, quality, and Docker build) before submitting your PR.
+
+Thank you for your contributions! 
+
+---
+
+<p align="center"><b>You're now ready to start working on the project. Good luck! 🍀</b></p>
