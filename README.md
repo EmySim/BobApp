@@ -1,33 +1,59 @@
 # BobApp 🚀  
 Collaborative joke application, composed of an Angular front-end and a Spring Boot back-end.
 
-## Tech Stack
+##  Prerequisites
 
-<p>
-  <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/npm-%3E%3D6.0.0-CB3837?logo=npm&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/yarn-%3E%3D1.22.0-2C8EBB?logo=yarn&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Java-11+-007396?logo=java&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Maven-3+-C71A36?logo=apachemaven&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Angular-18+-dd0031?logo=angular&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" />
-  <img src="https://img.shields.io/github/workflow/status/EmySim/BobApp/CI%2FCD%20Pipeline?label=CI%2FCD&logo=githubactions&style=for-the-badge" />
-</p>
+###  Front-end
 
-## Prerequisites 
+<a href="https://angular.io/">
+  <img src="https://img.shields.io/badge/Angular-18+-dd0031?logo=angular&logoColor=white&style=for-the-badge" alt="Angular" />
+</a><br/>
 
-**Front-end**  
-- [Node.js](https://nodejs.org/) ≥ 18.x  
-- npm or yarn
+<a href="https://nodejs.org/">
+  <img src="https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white&style=for-the-badge" alt="Node.js" />
+</a><br/>
 
-**Back-end**  
-- Java ≥ 11 (JDK)  
-- [Maven](https://maven.apache.org/)
+<a href="https://www.npmjs.com/">
+  <img src="https://img.shields.io/badge/npm-9+-CB3837?logo=npm&logoColor=white&style=for-the-badge" alt="npm" />
+</a><br/>
 
-**Containerization**  
-- [Docker](https://www.docker.com/) & [Docker Compose](https://docs.docker.com/compose/)
+---
+
+###  Back-end
+
+<a href="https://spring.io/projects/spring-boot">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.x-6DB33F?logo=springboot&logoColor=white&style=for-the-badge" alt="Spring Boot" />
+</a><br/>
+
+<a href="https://openjdk.org/">
+  <img src="https://img.shields.io/badge/Java-11+-007396?logo=java&logoColor=white&style=for-the-badge" alt="Java" />
+</a><br/>
+
+<a href="https://maven.apache.org/">
+  <img src="https://img.shields.io/badge/Maven-3.8+-C71A36?logo=apachemaven&logoColor=white&style=for-the-badge" alt="Maven" />
+</a><br/>
+
+---
+
+###  Containerization
+
+<a href="https://docs.docker.com/compose/">
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white&style=for-the-badge" alt="Docker Compose" />
+</a><br/>
+
+- [Docker](https://www.docker.com/)
+
+---
+
+###  CI / Quality / Licence
+
+<a href="https://github.com/EmySim/BobApp/actions">
+  <img src="https://img.shields.io/github/workflow/status/EmySim/BobApp/CI%2FCD%20Pipeline?label=CI%2FCD&logo=githubactions&style=for-the-badge" alt="CI/CD" />
+</a><br/>
+
+<a href="https://sonarcloud.io/">
+  <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" alt="SonarCloud" />
+</a><br/>
 
 ---
 
