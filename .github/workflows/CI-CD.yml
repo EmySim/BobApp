@@ -126,7 +126,7 @@ jobs:
         working-directory: front
         env:
           CI: true
-        run: npm run test:ci -- --coverage --coverageDirectory=coverage
+        run: npm run test:ci 
 
       - name: Upload Frontend Coverage Report
         uses: actions/upload-artifact@v4
@@ -186,7 +186,7 @@ jobs:
           echo "::set-output name=status::$QUALITY_STATUS"
 
           if [ "$QUALITY_STATUS" != "OK" ]; then
-            echo "❌ Quality Gate failed. Stopping pipeline."
+            echo "Quality Gate failed. Stopping pipeline."
             exit 1
           fi
 
@@ -225,6 +225,6 @@ jobs:
 
       - name: Deployment Summary
         run: |
-          echo "✅ Déploiement réussi !"
+          echo "Déploiement réussi !"
           echo "Backend: $BACKEND_IMAGE:latest"
           echo "Frontend: $FRONTEND_IMAGE:latest"
