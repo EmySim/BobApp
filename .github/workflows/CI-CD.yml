@@ -2,80 +2,154 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
 
 env:
   DOCKERHUB_USERNAME: emysim
   BACKEND_IMAGE: emysim/bobapp-backend
   FRONTEND_IMAGE: emysim/bobapp-frontend
 
+# =====================================================
+# JOBS
+# =====================================================
 jobs:
-  ci-cd:
-    name: Build, Test, Analyze & Deploy
+  # ======================
+  # BACKEND BUILD
+  # ======================
+  backend-build:
+    name: Backend - Build
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Checkout du code source
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
- # --- Configuration des environnements ---
-
-      # 2. Setup JDK 17 pour le backend
-      - name: Set up JDK 17
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: 'maven'
 
-      # 3. Setup Node.js 18 pour le frontend
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - name: Build Backend
+        working-directory: back
+        run: mvn -B clean package -DskipTests
+
+      - name: Upload Backend Build Artifact
+        uses: actions/upload-artifact@v4
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'front/package-lock.json'
+          name: backend-build
+          path: back/target/*.jar
+          retention-days: 7
 
-      # 4. Cache Node modules
-      - name: Cache Node modules
-        uses: actions/cache@v4.3.0
+  # ======================
+  # BACKEND TEST
+  # ======================
+  backend-test:
+    name: Backend - Test & Coverage
+    runs-on: ubuntu-latest
+    needs: backend-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
         with:
-          path: front/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-node-
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'maven'
 
-# --- Préparation et Tests du Monorepo ---
-
-      # 5. Build et test du backend avec Jacoco
-      - name: Backend - Build and Test
+      - name: Run Tests with JaCoCo
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: |
-          mvn clean install -DskipTests=true
-          mvn test jacoco:report
+        run: mvn test jacoco:report
 
-      # 6. Build et test du frontend
-      - name: Frontend - Install dependencies
+      - name: Upload Backend Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage-report
+          path: back/target/site/jacoco/
+          retention-days: 7
+
+  # ======================
+  # FRONTEND BUILD
+  # ======================
+  frontend-build:
+    name: Frontend - Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install Dependencies
         working-directory: front
         run: npm ci
 
-      - name: Frontend - Run tests with coverage
+      - name: Build Frontend
+        working-directory: front
+        run: npm run build
+
+      - name: Upload Frontend Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build
+          path: front/dist/
+          retention-days: 7
+
+  # ======================
+  # FRONTEND TEST
+  # ======================
+  frontend-test:
+    name: Frontend - Test & Coverage
+    runs-on: ubuntu-latest
+    needs: frontend-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: front/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: front
+        run: npm ci
+
+      - name: Run Tests with Coverage
         working-directory: front
         env:
           CI: true
-        run: npm run test:ci
+        run: npm run test:ci -- --coverage --coverageDirectory=coverage
 
-# --- Analyse de Qualité ---
+      - name: Upload Frontend Coverage Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage-report
+          path: front/coverage/
+          retention-days: 7
 
-      # 7. Analyse SonarCloud
+  # ======================
+  # SONAR ANALYSIS + QUALITY GATE
+  # ======================
+  sonar:
+    name: SonarCloud Analysis & Quality Gate
+    runs-on: ubuntu-latest
+    needs: [backend-test, frontend-test]
+    outputs:
+      gate-status: ${{ steps.qualitygate.outputs.status }}
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v5.0.0
+        uses: SonarSource/sonarqube-scan-action@v1
         with:
           projectBaseDir: "."
           args: >
@@ -85,54 +159,72 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # 8. Installer jq pour le parsing JSON
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 9. Vérification du Quality Gate SonarCloud via l'API
-      - name: SonarCloud Quality Gate Check
+      - name: Wait for Sonar Quality Gate
         id: qualitygate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           PROJECT_KEY="emysim_BobApp"
+          # Récupérer l'ID de la dernière analyse
           ANALYSIS_ID=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" | jq -r '.queue[0].id')
+          echo "Analyse ID: $ANALYSIS_ID"
+          
+          # Attendre que l’analyse soit terminée
           for i in {1..30}; do
             STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/task?id=$ANALYSIS_ID" | jq -r '.task.status')
-            if [ "$STATUS" == "SUCCESS" ]; then
-              break
-            fi
+            echo "Statut Sonar: $STATUS"
+            if [ "$STATUS" == "SUCCESS" ]; then break; fi
             sleep 5
           done
-          QUALITY_GATE_STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
-          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
-          echo "::set-output name=passed::$QUALITY_GATE_STATUS"
-          if [ "$QUALITY_GATE_STATUS" != "OK" ]; then
+
+          # Vérifier le Quality Gate
+          QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
+          echo "Quality Gate Status: $QUALITY_STATUS"
+          echo "::set-output name=status::$QUALITY_STATUS"
+
+          if [ "$QUALITY_STATUS" != "OK" ]; then
+            echo "❌ Quality Gate failed. Stopping pipeline."
             exit 1
           fi
 
-      # 10. Déploiement Docker si Quality Gate OK
-      - name: Build & Push Docker Images
-        if: steps.qualitygate.outputs.passed == 'OK'
-        run: |
-          echo "Quality Gate OK, déploiement Docker..."
-          docker login -u $DOCKERHUB_USERNAME -p ${{ secrets.DOCKERHUB_TOKEN }}
-          docker build -t $BACKEND_IMAGE:latest ./back
-          docker push $BACKEND_IMAGE:latest
-          docker build -t $FRONTEND_IMAGE:latest ./front
-          docker push $FRONTEND_IMAGE:latest
+  # ======================
+  # DEPLOY (only if quality gate OK)
+  # ======================
+  deploy:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [sonar]
+    if: needs.sonar.outputs.gate-status == 'OK'
 
-      # 11. Résumé du déploiement
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to DockerHub
+        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+
+      - name: Build & Push Backend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./back
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build & Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./front
+          push: true
+          tags: ${{ env.FRONTEND_IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Deployment Summary
-        if: steps.qualitygate.outputs.passed == 'OK'
         run: |
-          echo "Déploiement réussi !"
-          echo "Backend Image: $BACKEND_IMAGE:latest"
-          echo "Frontend Image: $FRONTEND_IMAGE:latest"
-
-      # 12. Echec Quality Gate
-      - name: Quality Gate Failed
-        if: steps.qualitygate.outputs.passed != 'OK'
-        run: |
-          echo "Quality Gate non validée, déploiement annulé."
-          exit 1
+          echo "✅ Déploiement réussi !"
+          echo "Backend: $BACKEND_IMAGE:latest"
+          echo "Frontend: $FRONTEND_IMAGE:latest"
