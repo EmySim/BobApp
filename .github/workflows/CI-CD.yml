@@ -25,20 +25,13 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
 
       - name: Build Backend
         working-directory: back
         run: mvn -B clean package -DskipTests
-
-      - name: Upload Backend Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-build
-          path: back/target/*.jar
-          retention-days: 7
 
   # ======================
   # BACKEND TEST
@@ -53,9 +46,9 @@ jobs:
       - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'maven'
+          java-version: "17"
+          distribution: "temurin"
+          cache: "maven"
 
       - name: Run Tests with JaCoCo
         working-directory: back
@@ -94,13 +87,6 @@ jobs:
         working-directory: front
         run: npm run build
 
-      - name: Upload Frontend Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-build
-          path: front/dist/
-          retention-days: 7
-
   # ======================
   # FRONTEND TEST
   # ======================
@@ -126,7 +112,7 @@ jobs:
         working-directory: front
         env:
           CI: true
-        run: npm run test:ci 
+        run: npm run test:ci
 
       - name: Upload Frontend Coverage Report
         uses: actions/upload-artifact@v4
@@ -171,7 +157,7 @@ jobs:
           # Récupérer l'ID de la dernière analyse
           ANALYSIS_ID=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" | jq -r '.queue[0].id')
           echo "Analyse ID: $ANALYSIS_ID"
-          
+
           # Attendre que l’analyse soit terminée
           for i in {1..30}; do
             STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/task?id=$ANALYSIS_ID" | jq -r '.task.status')
