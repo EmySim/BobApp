@@ -54,7 +54,7 @@ Collaborative joke application, composed of an Angular front-end and a Spring Bo
   <img src="https://img.shields.io/github/actions/workflow/status/EmySim/BobApp/CI-CD.yml?branch=main&label=CI%2FCD&logo=githubactions&style=for-the-badge" alt="CI/CD" />
 </a><br/>
 
-<a href="[https://sonarcloud.io/](https://docs.sonarsource.com/sonarqube-cloud/standards/managing-quality-gates/introduction-to-quality-gates)">
+<a href="https://docs.sonarsource.com/sonarqube-cloud/standards/managing-quality-gates/introduction-to-quality-gates">
   <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" alt="SonarCloud" />
 </a><br/>
 
