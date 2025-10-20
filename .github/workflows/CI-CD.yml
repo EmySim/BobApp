@@ -218,6 +218,6 @@ jobs:
 
       - name: Deployment Summary
         run: |
-          echo "Déploiement réussi !"
+          echo "Déploiement réussi !!"
           echo "Backend: $BACKEND_IMAGE:latest"
           echo "Frontend: $FRONTEND_IMAGE:latest"
