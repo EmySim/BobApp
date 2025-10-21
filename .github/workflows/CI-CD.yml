@@ -4,6 +4,9 @@ on:
   push:
     branches: [main, develop]
 
+  pull_request:
+    branches: [main, develop]
+
 env:
   DOCKERHUB_USERNAME: emysim
   BACKEND_IMAGE: emysim/bobapp-backend
@@ -215,3 +218,4 @@ jobs:
           echo "Déploiement réussi !!"
           echo "Backend: $BACKEND_IMAGE:latest"
           echo "Frontend: $FRONTEND_IMAGE:latest"
+          echo "Commit SHA: ${{ github.sha }}"
