@@ -3,7 +3,6 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop]
-
   pull_request:
     branches: [main, develop]
 
@@ -17,10 +16,10 @@ env:
 # =====================================================
 jobs:
   # ======================
-  # BACKEND BUILD
+  # BACKEND : BUILD + TEST
   # ======================
-  backend-build:
-    name: Backend - Build
+  backend:
+    name: Backend - Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,45 +31,31 @@ jobs:
           distribution: "temurin"
           cache: "maven"
 
-      - name: Build Backend
-        working-directory: back
-        run: mvn -B clean package -DskipTests
-
-  # ======================
-  # BACKEND TEST
-  # ======================
-  backend-test:
-    name: Backend - Test & Coverage
-    runs-on: ubuntu-latest
-    needs: backend-build
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: "17"
-          distribution: "temurin"
-          cache: "maven"
-
-      - name: Run Tests with JaCoCo
+      - name: Build & Test with Coverage
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: mvn test jacoco:report
+        run: mvn -B clean package jacoco:report
 
-      - name: Upload Backend Coverage Report
+      - name: Upload Backend JAR
         uses: actions/upload-artifact@v4
         with:
-          name: backend-coverage-report
+          name: backend-jar
+          path: back/target/*.jar
+          retention-days: 1
+
+      - name: Upload Backend Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
           path: back/target/site/jacoco/
           retention-days: 7
 
   # ======================
-  # FRONTEND BUILD
+  # FRONTEND : BUILD + TEST
   # ======================
-  frontend-build:
-    name: Frontend - Build
+  frontend:
+    name: Frontend - Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -90,26 +75,12 @@ jobs:
         working-directory: front
         run: npm run build
 
-  # ======================
-  # FRONTEND TEST
-  # ======================
-  frontend-test:
-    name: Frontend - Test & Coverage
-    runs-on: ubuntu-latest
-    needs: frontend-build
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Upload Frontend Build
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 18
-          cache: npm
-          cache-dependency-path: front/package-lock.json
-
-      - name: Install Dependencies
-        working-directory: front
-        run: npm ci
+          name: frontend-build
+          path: front/dist/
+          retention-days: 1
 
       - name: Run Tests with Coverage
         working-directory: front
@@ -117,10 +88,10 @@ jobs:
           CI: true
         run: npm run test:ci
 
-      - name: Upload Frontend Coverage Report
+      - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-coverage-report
+          name: frontend-coverage
           path: front/coverage/
           retention-days: 7
 
@@ -130,78 +101,138 @@ jobs:
   sonar:
     name: SonarCloud Analysis & Quality Gate
     runs-on: ubuntu-latest
-    needs: [backend-test, frontend-test]
+    needs: [backend, frontend]
     outputs:
       gate-status: ${{ steps.qualitygate.outputs.status }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: back/target/
+
+      - name: Download Backend Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-coverage
+          path: back/target/site/jacoco/
+
+      - name: Download Frontend Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: front/coverage/
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v1
+        uses: SonarSource/sonarcloud-scan-action@v3
         with:
           projectBaseDir: "."
           args: >
             -Dsonar.projectKey=emysim_BobApp
             -Dsonar.organization=emysim
-            -Dsonar.java.libraries=back/target/*.jar
+            -Dsonar.java.binaries=back/target/classes
+            -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
+            -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
-  
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Wait for Sonar Quality Gate
+      - name: Wait for Quality Gate
         id: qualitygate
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           PROJECT_KEY="emysim_BobApp"
-          # Récupérer l'ID de la dernière analyse
-          ANALYSIS_ID=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" | jq -r '.queue[0].id')
-          echo "Analyse ID: $ANALYSIS_ID"
+          
+          TASK_ID=$(curl -s -u $SONAR_TOKEN: \
+            "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" \
+            | jq -r '.current.id // .queue[0].id')
+          
+          echo "Task ID: $TASK_ID"
 
-          # Attendre que l’analyse soit terminée
-          for i in {1..30}; do
-            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/task?id=$ANALYSIS_ID" | jq -r '.task.status')
-            echo "Statut Sonar: $STATUS"
-            if [ "$STATUS" == "SUCCESS" ]; then break; fi
+          for i in {1..60}; do
+            STATUS=$(curl -s -u $SONAR_TOKEN: \
+              "https://sonarcloud.io/api/ce/task?id=$TASK_ID" \
+              | jq -r '.task.status')
+            
+            echo "Statut Sonar: $STATUS (tentative $i/60)"
+            
+            if [ "$STATUS" == "SUCCESS" ]; then
+              break
+            elif [ "$STATUS" == "FAILED" ] || [ "$STATUS" == "CANCELED" ]; then
+              echo "Analyse Sonar échouée avec le statut: $STATUS"
+              exit 1
+            fi
+            
             sleep 5
           done
 
-          # Vérifier le Quality Gate
-          QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status')
+          QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: \
+            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" \
+            | jq -r '.projectStatus.status')
+          
           echo "Quality Gate Status: $QUALITY_STATUS"
-          echo "::set-output name=status::$QUALITY_STATUS"
+          echo "status=$QUALITY_STATUS" >> $GITHUB_OUTPUT
 
           if [ "$QUALITY_STATUS" != "OK" ]; then
-            echo "Quality Gate failed. Stopping pipeline."
+            echo "(╥﹏╥) Quality Gate échouée. Pipeline arrêté."
             exit 1
           fi
+          
+          echo "	ᕦ( ͡° ͜ʖ ͡°)ᕤ Quality Gate validée !"
 
   # ======================
-  # DEPLOY (only if quality gate OK)
+  # DEPLOY
   # ======================
   deploy:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [sonar]
-    if: needs.sonar.outputs.gate-status == 'OK'
+    needs: [backend, frontend, sonar]
+    if: |
+      github.event_name == 'push' && 
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
+      needs.sonar.outputs.gate-status == 'OK'
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Download Backend JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-jar
+          path: back/target/
+
+      - name: Download Frontend Build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-build
+          path: front/dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Login to DockerHub
-        run: echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u $DOCKERHUB_USERNAME --password-stdin
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build & Push Backend Image
         uses: docker/build-push-action@v6
         with:
           context: ./back
           push: true
-          tags: ${{ env.BACKEND_IMAGE }}:latest
+          tags: |
+            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -210,13 +241,16 @@ jobs:
         with:
           context: ./front
           push: true
-          tags: ${{ env.FRONTEND_IMAGE }}:latest
+          tags: |
+            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Deployment Summary
         run: |
-          echo "Déploiement réussi !!"
-          echo "Backend: $BACKEND_IMAGE:latest"
-          echo "Frontend: $FRONTEND_IMAGE:latest"
-          echo "Commit SHA: ${{ github.sha }}"
+          echo "🚀 Déploiement réussi !"
+          echo "📦 Backend: $BACKEND_IMAGE:latest"
+          echo "📦 Frontend: $FRONTEND_IMAGE:latest"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
