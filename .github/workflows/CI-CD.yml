@@ -129,7 +129,7 @@ jobs:
           path: front/coverage/
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-scan-action@v3
+        uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: "."
           args: >
