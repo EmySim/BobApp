@@ -11,13 +11,8 @@ env:
   BACKEND_IMAGE: emysim/bobapp-backend
   FRONTEND_IMAGE: emysim/bobapp-frontend
 
-# =====================================================
-# JOBS
-# =====================================================
 jobs:
-  # ======================
   # 1. BACKEND : BUILD + TEST
-  # ======================
   backend:
     name: Backend - Build & Test
     runs-on: ubuntu-latest
@@ -51,9 +46,7 @@ jobs:
           path: back/target/site/jacoco/
           retention-days: 7
 
-  # ======================
   # 2. FRONTEND : BUILD + TEST
-  # ======================
   frontend:
     name: Frontend - Build & Test
     runs-on: ubuntu-latest
@@ -94,19 +87,12 @@ jobs:
           name: frontend-coverage
           path: front/coverage/
           retention-days: 7
-          
-  # -----------------------------------------------------
-  # PARALLEL SONAR ANALYSIS JOBS
-  # Ces jobs démarrent dès que leur composant est prêt.
-  # -----------------------------------------------------
 
-  # ==================================
   # 3. BACKEND : SONAR ANALYSIS
-  # ==================================
   backend-sonar:
     name: Backend - SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: [backend] # Démarrage dès que le 'backend' est prêt
+    needs: [backend]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -118,11 +104,17 @@ jobs:
           name: backend-jar
           path: back/target/
 
+      - name: Check Backend artifact
+        run: ls -la back/target || true
+
       - name: Download Backend Coverage
         uses: actions/download-artifact@v4
         with:
           name: backend-coverage
           path: back/target/site/jacoco/
+
+      - name: Check Backend coverage
+        run: ls -la back/target/site/jacoco || true
 
       - name: SonarCloud Scan (Backend Only)
         uses: SonarSource/sonarcloud-github-action@v2
@@ -133,19 +125,17 @@ jobs:
             -Dsonar.organization=emysim
             -Dsonar.java.binaries=back/target/classes
             -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
-            -Dsonar.exclusions=front/** # Exclure explicitement le frontend
+            -Dsonar.exclusions=front/**
             -Dsonar.analysis.mode=publish
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ==================================
   # 4. FRONTEND : SONAR ANALYSIS
-  # ==================================
   frontend-sonar:
     name: Frontend - SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: [frontend] # Démarrage dès que le 'frontend' est prêt
+    needs: [frontend]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,6 +147,9 @@ jobs:
           name: frontend-coverage
           path: front/coverage/
 
+      - name: Check Frontend coverage
+        run: ls -la front/coverage || true
+
       - name: SonarCloud Scan (Frontend Only)
         uses: SonarSource/sonarcloud-github-action@v2
         with:
@@ -165,25 +158,17 @@ jobs:
             -Dsonar.projectKey=emysim_BobApp
             -Dsonar.organization=emysim
             -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
-            -Dsonar.sources=front/src # Limiter l'analyse au code frontend
+            -Dsonar.sources=front/src
             -Dsonar.analysis.mode=publish
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-  # -----------------------------------------------------
-  # QUALITY GATE CHECK JOB
-  # Ce job attend la soumission des deux analyses pour vérifier l'état final.
-  # -----------------------------------------------------
-
-  # ==================================
   # 5. QUALITY GATE CHECK
-  # ==================================
   quality-gate:
     name: Quality Gate Check
     runs-on: ubuntu-latest
-    needs: [backend-sonar, frontend-sonar] # Attend que les DEUX analyses soient SOUmises
+    needs: [backend-sonar, frontend-sonar]
     outputs:
       gate-status: ${{ steps.qualitycheck.outputs.status }}
     steps:
@@ -195,39 +180,44 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
+          set -euo pipefail
           PROJECT_KEY="emysim_BobApp"
-          
-          # La première requête peut échouer si le premier job Sonar n'est pas encore traité,
-          # donc on utilise la requête du statut du composant.
-          TASK_ID=$(curl -s -u $SONAR_TOKEN: \
-            "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" \
-            | jq -r '.current.id // .queue[0].id')
-          
-          echo "Task ID: $TASK_ID"
+          MAX_ATTEMPTS=60
+          SLEEP_SECONDS=5
 
-          # 60 tentatives * 5 secondes = 300s (5 minutes d'attente max)
-          for i in {1..60}; do
-            STATUS=$(curl -s -u $SONAR_TOKEN: \
-              "https://sonarcloud.io/api/ce/task?id=$TASK_ID" \
-              | jq -r '.task.status')
-            
-            echo "Statut Sonar: $STATUS (tentative $i/60)"
-            
-            if [ "$STATUS" == "SUCCESS" ]; then
+          # Wait until we can obtain a task id for the project (some delay can exist)
+          ATTEMPT=1
+          TASK_ID=""
+          while [ -z "$TASK_ID" ] && [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+            TASK_ID=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" | jq -r '.current.id // .queue[0].id // ""')
+            echo "Attempt $ATTEMPT - Task ID: '$TASK_ID'"
+            if [ -n "$TASK_ID" ]; then
               break
-            elif [ "$STATUS" == "FAILED" ] || [ "$STATUS" == "CANCELED" ]; then
+            fi
+            ATTEMPT=$((ATTEMPT+1))
+            sleep $SLEEP_SECONDS
+          done
+
+          if [ -z "$TASK_ID" ]; then
+            echo "Aucun Task ID Sonar trouvé après $((MAX_ATTEMPTS * SLEEP_SECONDS))s"
+            exit 1
+          fi
+
+          # Poll the CE task until it's finished
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/ce/task?id=$TASK_ID" | jq -r '.task.status // "UNKNOWN"')
+            echo "Statut Sonar (task $TASK_ID): $STATUS (tentative $i/$MAX_ATTEMPTS)"
+            if [ "$STATUS" = "SUCCESS" ]; then
+              break
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
               echo "Analyse Sonar échouée avec le statut: $STATUS"
               exit 1
             fi
-            
-            sleep 5
+            sleep $SLEEP_SECONDS
           done
 
           # Vérification du statut global du Quality Gate
-          QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: \
-            "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" \
-            | jq -r '.projectStatus.status')
-          
+          QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status // "UNKNOWN"')
           echo "Quality Gate Status: $QUALITY_STATUS"
           echo "status=$QUALITY_STATUS" >> $GITHUB_OUTPUT
 
@@ -235,23 +225,16 @@ jobs:
             echo "(╥﹏╥) Quality Gate échouée. Pipeline arrêté."
             exit 1
           fi
-          
-          echo "	ᕦ( ͡° ͜ʖ ͡°)ᕤ Quality Gate validée !"
 
-  # -----------------------------------------------------
+          echo "ᕦ( ͡° ͜ʖ ͡°)ᕤ Quality Gate validée !"
 
-  # ==================================
   # 6. DEPLOY
-  # ==================================
   deploy:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [backend, frontend, quality-gate] # Dépend de la vérification finale de qualité
-    if: |
-      github.event_name == 'push' && 
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
-      needs.quality-gate.outputs.gate-status == 'OK' # Condition sur le nouveau job
-    
+    needs: [backend, frontend, quality-gate]
+    # Use expression syntax to avoid invisible character issues and be explicit
+    if: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && needs.quality-gate.outputs.gate-status == 'OK' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -261,11 +244,17 @@ jobs:
           name: backend-jar
           path: back/target/
 
+      - name: Check Backend artifact (deploy)
+        run: ls -la back/target || true
+
       - name: Download Frontend Build
         uses: actions/download-artifact@v4
         with:
           name: frontend-build
           path: front/dist/
+
+      - name: Check Frontend build (deploy)
+        run: ls -la front/dist || true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
