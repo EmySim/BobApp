@@ -16,7 +16,7 @@ env:
 # =====================================================
 jobs:
   # ======================
-  # BACKEND : BUILD + TEST
+  # 1. BACKEND : BUILD + TEST
   # ======================
   backend:
     name: Backend - Build & Test
@@ -52,7 +52,7 @@ jobs:
           retention-days: 7
 
   # ======================
-  # FRONTEND : BUILD + TEST
+  # 2. FRONTEND : BUILD + TEST
   # ======================
   frontend:
     name: Frontend - Build & Test
@@ -94,17 +94,19 @@ jobs:
           name: frontend-coverage
           path: front/coverage/
           retention-days: 7
+          
+  # -----------------------------------------------------
+  # PARALLEL SONAR ANALYSIS JOBS
+  # Ces jobs démarrent dès que leur composant est prêt.
+  # -----------------------------------------------------
 
-  # ======================
-  # SONAR ANALYSIS + QUALITY GATE
-  # ======================
-  sonar:
-    name: SonarCloud Analysis & Quality Gate
+  # ==================================
+  # 3. BACKEND : SONAR ANALYSIS
+  # ==================================
+  backend-sonar:
+    name: Backend - SonarCloud Analysis
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
-    outputs:
-      gate-status: ${{ steps.qualitygate.outputs.status }}
-
+    needs: [backend] # Démarrage dès que le 'backend' est prêt
     steps:
       - uses: actions/checkout@v4
         with:
@@ -122,13 +124,7 @@ jobs:
           name: backend-coverage
           path: back/target/site/jacoco/
 
-      - name: Download Frontend Coverage
-        uses: actions/download-artifact@v4
-        with:
-          name: frontend-coverage
-          path: front/coverage/
-
-      - name: SonarCloud Scan
+      - name: SonarCloud Scan (Backend Only)
         uses: SonarSource/sonarcloud-github-action@v2
         with:
           projectBaseDir: "."
@@ -137,27 +133,79 @@ jobs:
             -Dsonar.organization=emysim
             -Dsonar.java.binaries=back/target/classes
             -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
-            -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
+            -Dsonar.exclusions=front/** # Exclure explicitement le frontend
+            -Dsonar.analysis.mode=publish
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ==================================
+  # 4. FRONTEND : SONAR ANALYSIS
+  # ==================================
+  frontend-sonar:
+    name: Frontend - SonarCloud Analysis
+    runs-on: ubuntu-latest
+    needs: [frontend] # Démarrage dès que le 'frontend' est prêt
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download Frontend Coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-coverage
+          path: front/coverage/
+
+      - name: SonarCloud Scan (Frontend Only)
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: "."
+          args: >
+            -Dsonar.projectKey=emysim_BobApp
+            -Dsonar.organization=emysim
+            -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
+            -Dsonar.sources=front/src # Limiter l'analyse au code frontend
+            -Dsonar.analysis.mode=publish
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  # -----------------------------------------------------
+  # QUALITY GATE CHECK JOB
+  # Ce job attend la soumission des deux analyses pour vérifier l'état final.
+  # -----------------------------------------------------
+
+  # ==================================
+  # 5. QUALITY GATE CHECK
+  # ==================================
+  quality-gate:
+    name: Quality Gate Check
+    runs-on: ubuntu-latest
+    needs: [backend-sonar, frontend-sonar] # Attend que les DEUX analyses soient SOUmises
+    outputs:
+      gate-status: ${{ steps.qualitycheck.outputs.status }}
+    steps:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Wait for Quality Gate
-        id: qualitygate
+        id: qualitycheck
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           PROJECT_KEY="emysim_BobApp"
           
+          # La première requête peut échouer si le premier job Sonar n'est pas encore traité,
+          # donc on utilise la requête du statut du composant.
           TASK_ID=$(curl -s -u $SONAR_TOKEN: \
             "https://sonarcloud.io/api/ce/component?component=$PROJECT_KEY" \
             | jq -r '.current.id // .queue[0].id')
           
           echo "Task ID: $TASK_ID"
 
+          # 60 tentatives * 5 secondes = 300s (5 minutes d'attente max)
           for i in {1..60}; do
             STATUS=$(curl -s -u $SONAR_TOKEN: \
               "https://sonarcloud.io/api/ce/task?id=$TASK_ID" \
@@ -175,6 +223,7 @@ jobs:
             sleep 5
           done
 
+          # Vérification du statut global du Quality Gate
           QUALITY_STATUS=$(curl -s -u $SONAR_TOKEN: \
             "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" \
             | jq -r '.projectStatus.status')
@@ -189,18 +238,20 @@ jobs:
           
           echo "	ᕦ( ͡° ͜ʖ ͡°)ᕤ Quality Gate validée !"
 
-  # ======================
-  # DEPLOY
-  # ======================
+  # -----------------------------------------------------
+
+  # ==================================
+  # 6. DEPLOY
+  # ==================================
   deploy:
     name: Build & Push Docker Images
     runs-on: ubuntu-latest
-    needs: [backend, frontend, sonar]
+    needs: [backend, frontend, quality-gate] # Dépend de la vérification finale de qualité
     if: |
-      github.event_name == 'push' && 
+      github.event_name == 'push' && 
       (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') &&
-      needs.sonar.outputs.gate-status == 'OK'
-
+      needs.quality-gate.outputs.gate-status == 'OK' # Condition sur le nouveau job
+    
     steps:
       - uses: actions/checkout@v4
 
