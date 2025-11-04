@@ -58,6 +58,8 @@ Collaborative joke application, composed of an Angular front-end and a Spring Bo
   <img src="https://img.shields.io/badge/SonarCloud-Quality%20Gate-orange?logo=sonarcloud&logoColor=white&style=for-the-badge" alt="SonarCloud" />
 </a><br/>
 
+[![Quality gate](https://sonarcloud.io/api/project_badges/quality_gate?project=emysim_BobApp)](https://sonarcloud.io/summary/new_code?id=emysim_BobApp)
+
 ---
 
 ##  Clone the project
