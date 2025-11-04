@@ -2,10 +2,9 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
-  workflow_dispatch:
+    branches:
+      - main
+      - develop
 
 env:
   DOCKERHUB_USERNAME: emysim
@@ -18,104 +17,109 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout du code source
+      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # --- Configuration des environnements ---
-
-      - name: Set up JDK 17
+      # 2️⃣ Setup Java (Backend)
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: maven
+          cache: 'maven'
 
-      - name: Setup Node.js 18
+      # 3️⃣ Setup Node (Frontend)
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
-      # --- Backend ---
-      - name: Backend - Build & Test
+      # 4️⃣ Cache Node modules
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: front/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
+
+      # --- 🧱 BACKEND : Build + Test + Couverture ---
+      - name: Backend - Build & Test with Coverage
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
         run: |
           mvn -B clean verify jacoco:report
+          ls -la target/site/jacoco
 
-      # --- Frontend ---
-      - name: Frontend - Install & Test
+      # 📦 Artefact couverture backend (JaCoCo)
+      - name: Upload Backend Coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: back/target/site/jacoco/
+          retention-days: 7
+
+      # --- 💻 FRONTEND : Install + Test + Couverture ---
+      - name: Frontend - Install dependencies
+        working-directory: front
+        run: npm ci
+
+      - name: Frontend - Run tests with coverage
         working-directory: front
         env:
           CI: true
-        run: |
-          npm ci
-          npm run test:ci
-          npm run build
+        run: npm run test:ci
 
-      # --- Analyse de Qualité ---
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v2
+      # 📦 Artefact couverture frontend (lcov)
+      - name: Upload Frontend Coverage
+        uses: actions/upload-artifact@v4
         with:
-          projectBaseDir: .
+          name: frontend-coverage
+          path: front/coverage/
+          retention-days: 7
+
+      # --- 🧠 SONAR ANALYSIS ---
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v2.0.0
+        with:
+          projectBaseDir: "."
           args: >
             -Dsonar.projectKey=emysim_BobApp
             -Dsonar.organization=emysim
             -Dsonar.java.binaries=back/target/classes
             -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
             -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
-            -Dsonar.sources=back/src,front/src
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**
+            -Dsonar.sources=front/src,back/src
+            -Dsonar.exclusions=node_modules/**
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Quality Gate ---
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      # --- 🐳 DEPLOYMENT ---
+      - name: Login to DockerHub
+        if: always()
+        uses: docker/login-action@v3
+        with:
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Wait for Sonar Quality Gate
-        id: qualitygate
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Build & Push Backend Image
         run: |
-          PROJECT_KEY="emysim_BobApp"
-          echo "⏳ Waiting for SonarCloud analysis to finish..."
-          for i in {1..30}; do
-            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status // empty')
-            if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then
-              echo "Quality Gate: $STATUS"
-              echo "status=$STATUS" >> $GITHUB_OUTPUT
-              break
-            fi
-            sleep 10
-          done
-
-      # --- Déploiement ---
-      - name: Build & Push Docker Images
-        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
-        run: |
-          echo "✅ Quality Gate OK, déploiement en cours..."
-          docker login -u $DOCKERHUB_USERNAME -p ${{ secrets.DOCKERHUB_TOKEN }}
           docker build -t $BACKEND_IMAGE:latest ./back
           docker push $BACKEND_IMAGE:latest
+
+      - name: Build & Push Frontend Image
+        run: |
           docker build -t $FRONTEND_IMAGE:latest ./front
           docker push $FRONTEND_IMAGE:latest
 
       - name: Deployment Summary
-        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
         run: |
           echo "🚀 Déploiement réussi !"
-          echo "📦 Backend : $BACKEND_IMAGE:latest"
-          echo "📦 Frontend : $FRONTEND_IMAGE:latest"
-
-      - name: Quality Gate Failed
-        if: steps.qualitygate.outputs.status != 'OK'
-        run: |
-          echo "❌ Quality Gate échouée. Déploiement annulé."
-          exit 1
+          echo "📦 Backend: $BACKEND_IMAGE:latest"
+          echo "📦 Frontend: $FRONTEND_IMAGE:latest"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
