@@ -11,44 +11,55 @@ env:
   DOCKERHUB_USERNAME: emysim
   BACKEND_IMAGE: emysim/bobapp-backend
   FRONTEND_IMAGE: emysim/bobapp-frontend
-
 jobs:
   ci-cd:
     name: Build, Test, Analyze & Deploy
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout du code
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Setup Java (Backend)
+      - name: Detect changes
+        id: changes
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            backend:
+              - 'back/**'
+            frontend:
+              - 'front/**'
+
+      # Backend setup
       - name: Setup JDK 17
+        if: steps.changes.outputs.backend == 'true'
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3️⃣ Setup Node (Frontend)
+      # Frontend setup
       - name: Setup Node.js
+        if: steps.changes.outputs.frontend == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
           cache-dependency-path: 'front/package-lock.json'
 
-      # 4️⃣ Cache Node modules
       - name: Cache Node modules
+        if: steps.changes.outputs.frontend == 'true'
         uses: actions/cache@v4
         with:
           path: front/node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
 
-      # --- 🧱 BACKEND : Build + Test + Couverture ---
+      # Backend build & test
       - name: Backend - Build & Test with Coverage
+        if: steps.changes.outputs.backend == 'true'
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -56,34 +67,36 @@ jobs:
           mvn -B clean verify jacoco:report
           ls -la target/site/jacoco
 
-      # 📦 Artefact couverture backend (JaCoCo)
       - name: Upload Backend Coverage
+        if: steps.changes.outputs.backend == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: back/target/site/jacoco/
           retention-days: 7
 
-      # --- 💻 FRONTEND : Install + Test + Couverture ---
+      # Frontend build & test
       - name: Frontend - Install dependencies
+        if: steps.changes.outputs.frontend == 'true'
         working-directory: front
         run: npm ci
 
       - name: Frontend - Run tests with coverage
+        if: steps.changes.outputs.frontend == 'true'
         working-directory: front
         env:
           CI: true
         run: npm run test:ci
 
-      # 📦 Artefact couverture frontend (lcov)
       - name: Upload Frontend Coverage
+        if: steps.changes.outputs.frontend == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
           path: front/coverage/
           retention-days: 7
 
-      # --- 🧠 SONAR ANALYSIS ---
+      # SonarCloud analysis
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v2
         with:
@@ -100,7 +113,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Quality Gate ---
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
@@ -121,7 +133,7 @@ jobs:
             sleep 10
           done
 
-      # --- 🐳 DEPLOYMENT ---
+      # Docker build & push
       - name: Build & Push Docker Images
         if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
         env:
@@ -130,10 +142,16 @@ jobs:
         run: |
           echo "✅ Quality Gate OK, déploiement en cours..."
           echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
-          docker build -t $BACKEND_IMAGE:latest ./back
-          docker push $BACKEND_IMAGE:latest
-          docker build -t $FRONTEND_IMAGE:latest ./front
-          docker push $FRONTEND_IMAGE:latest
+
+          if [[ '${{ steps.changes.outputs.backend }}' == 'true' ]]; then
+            docker build -t $BACKEND_IMAGE:latest ./back
+            docker push $BACKEND_IMAGE:latest
+          fi
+
+          if [[ '${{ steps.changes.outputs.frontend }}' == 'true' ]]; then
+            docker build -t $FRONTEND_IMAGE:latest ./front
+            docker push $FRONTEND_IMAGE:latest
+          fi
 
       - name: Deployment Summary
         if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
