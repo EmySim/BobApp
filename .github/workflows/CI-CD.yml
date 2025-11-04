@@ -11,17 +11,20 @@ env:
   DOCKERHUB_USERNAME: emysim
   BACKEND_IMAGE: emysim/bobapp-backend
   FRONTEND_IMAGE: emysim/bobapp-frontend
+
 jobs:
   ci-cd:
     name: Build, Test, Analyze & Deploy
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2️⃣ Detect changes
       - name: Detect changes
         id: changes
         uses: dorny/paths-filter@v2
@@ -32,18 +35,18 @@ jobs:
             frontend:
               - 'front/**'
 
-      # Backend setup
+      # 3️⃣ Backend setup
       - name: Setup JDK 17
-        if: steps.changes.outputs.backend == 'true'
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.backend == ''
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
-      # Frontend setup
+      # 4️⃣ Frontend setup
       - name: Setup Node.js
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.frontend == ''
         uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -51,15 +54,15 @@ jobs:
           cache-dependency-path: 'front/package-lock.json'
 
       - name: Cache Node modules
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.frontend == ''
         uses: actions/cache@v4
         with:
           path: front/node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
 
-      # Backend build & test
+      # 5️⃣ Backend build & test
       - name: Backend - Build & Test with Coverage
-        if: steps.changes.outputs.backend == 'true'
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.backend == ''
         working-directory: back
         env:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
@@ -68,35 +71,35 @@ jobs:
           ls -la target/site/jacoco
 
       - name: Upload Backend Coverage
-        if: steps.changes.outputs.backend == 'true'
+        if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.backend == ''
         uses: actions/upload-artifact@v4
         with:
           name: backend-coverage
           path: back/target/site/jacoco/
           retention-days: 7
 
-      # Frontend build & test
+      # 6️⃣ Frontend build & test
       - name: Frontend - Install dependencies
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.frontend == ''
         working-directory: front
         run: npm ci
 
       - name: Frontend - Run tests with coverage
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.frontend == ''
         working-directory: front
         env:
           CI: true
         run: npm run test:ci
 
       - name: Upload Frontend Coverage
-        if: steps.changes.outputs.frontend == 'true'
+        if: steps.changes.outputs.frontend == 'true' || steps.changes.outputs.frontend == ''
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
           path: front/coverage/
           retention-days: 7
 
-      # SonarCloud analysis
+      # 7️⃣ SonarCloud analysis
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v2
         with:
@@ -133,7 +136,7 @@ jobs:
             sleep 10
           done
 
-      # Docker build & push
+      # 8️⃣ Docker build & push
       - name: Build & Push Docker Images
         if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
         env:
@@ -142,17 +145,16 @@ jobs:
         run: |
           echo "✅ Quality Gate OK, déploiement en cours..."
           echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
-
-          if [[ '${{ steps.changes.outputs.backend }}' == 'true' ]]; then
+          if [[ "${{ steps.changes.outputs.backend }}" == 'true' || "${{ steps.changes.outputs.backend }}" == '' ]]; then
             docker build -t $BACKEND_IMAGE:latest ./back
             docker push $BACKEND_IMAGE:latest
           fi
-
-          if [[ '${{ steps.changes.outputs.frontend }}' == 'true' ]]; then
+          if [[ "${{ steps.changes.outputs.frontend }}" == 'true' || "${{ steps.changes.outputs.frontend }}" == '' ]]; then
             docker build -t $FRONTEND_IMAGE:latest ./front
             docker push $FRONTEND_IMAGE:latest
           fi
 
+      # 9️⃣ Deployment Summary
       - name: Deployment Summary
         if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
         run: |
@@ -162,6 +164,7 @@ jobs:
           echo "🔖 Commit: ${{ github.sha }}"
           echo "🌿 Branch: ${{ github.ref_name }}"
 
+      # 10️⃣ Quality Gate Failed
       - name: Quality Gate Failed
         if: steps.qualitygate.outputs.status != 'OK'
         run: |
