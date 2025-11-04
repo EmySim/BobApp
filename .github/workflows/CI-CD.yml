@@ -60,7 +60,7 @@ jobs:
 
       # --- Analyse de Qualité ---
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@v5
+        uses: SonarSource/sonarqube-scan-action@v2
         with:
           projectBaseDir: .
           args: >
