@@ -2,9 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - develop
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
 
 env:
   DOCKERHUB_USERNAME: emysim
@@ -84,42 +85,67 @@ jobs:
 
       # --- 🧠 SONAR ANALYSIS ---
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v2.0.0
+        uses: SonarSource/sonarqube-scan-action@v2
         with:
-          projectBaseDir: "."
+          projectBaseDir: .
           args: >
             -Dsonar.projectKey=emysim_BobApp
             -Dsonar.organization=emysim
             -Dsonar.java.binaries=back/target/classes
             -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
             -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
-            -Dsonar.sources=front/src,back/src
-            -Dsonar.exclusions=node_modules/**
+            -Dsonar.sources=back/src,front/src
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --- Quality Gate ---
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Wait for Sonar Quality Gate
+        id: qualitygate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          PROJECT_KEY="emysim_BobApp"
+          echo "⏳ Waiting for SonarCloud analysis to finish..."
+          for i in {1..30}; do
+            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status // empty')
+            if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then
+              echo "Quality Gate: $STATUS"
+              echo "status=$STATUS" >> $GITHUB_OUTPUT
+              break
+            fi
+            sleep 10
+          done
 
       # --- 🐳 DEPLOYMENT ---
-      - name: Login to DockerHub
-        if: always()
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & Push Backend Image
+      - name: Build & Push Docker Images
+        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
+          echo "✅ Quality Gate OK, déploiement en cours..."
+          echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
           docker build -t $BACKEND_IMAGE:latest ./back
           docker push $BACKEND_IMAGE:latest
-
-      - name: Build & Push Frontend Image
-        run: |
           docker build -t $FRONTEND_IMAGE:latest ./front
           docker push $FRONTEND_IMAGE:latest
 
       - name: Deployment Summary
+        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
         run: |
           echo "🚀 Déploiement réussi !"
           echo "📦 Backend: $BACKEND_IMAGE:latest"
           echo "📦 Frontend: $FRONTEND_IMAGE:latest"
           echo "🔖 Commit: ${{ github.sha }}"
           echo "🌿 Branch: ${{ github.ref_name }}"
+
+      - name: Quality Gate Failed
+        if: steps.qualitygate.outputs.status != 'OK'
+        run: |
+          echo "❌ Quality Gate échouée. Déploiement annulé."
+          exit 1
