@@ -115,7 +115,7 @@ jobs:
             -Dsonar.organization=emysim
             -Dsonar.java.binaries=back/target/classes
             -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
-            -Dsonar.javascript.lcov.reportPaths=front/coverage/lcov.info
+            -Dsonar.javascript.lcov.reportPaths=front/coverage/bobapp/lcov.info
             -Dsonar.sources=back/src,front/src
             -Dsonar.exclusions=**/node_modules/**,**/dist/**
         env:
