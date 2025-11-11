@@ -100,7 +100,7 @@ jobs:
 
         # 8️⃣ Ensure backend compiled before Sonar (only if backend changed)
       - name: Ensure backend compiled (for Sonar)
-        #if: steps.changes.outputs.backend == 'true'
+        if: steps.changes.outputs.backend == 'true'
         working-directory: back
         run: mvn -B compile
 
