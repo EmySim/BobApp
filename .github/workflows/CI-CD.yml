@@ -69,6 +69,7 @@ jobs:
           mvn -B clean verify jacoco:report
           ls -R target || true
 
+      #  Artefact couverture backend (JaCoCo)
       - name: Upload Backend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -89,6 +90,7 @@ jobs:
           CI: true
         run: npm run test:ci
 
+        #  Artefact couverture frontend (lcov)
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
         with:
