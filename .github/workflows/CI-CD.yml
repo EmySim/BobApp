@@ -80,7 +80,7 @@ jobs:
       - name: Frontend - Install dependencies
         if: steps.changes.outputs.frontend == 'true' 
         working-directory: front
-        run: npm ci
+        run: npm install -g @angular/cli
 
       - name: Frontend - Run tests with coverage
         working-directory: front
