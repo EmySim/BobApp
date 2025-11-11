@@ -83,6 +83,7 @@ jobs:
         run: npm install -g @angular/cli
 
       - name: Frontend - Run tests with coverage
+        if: steps.changes.outputs.frontend == 'true'
         working-directory: front
         env:
           CI: true
