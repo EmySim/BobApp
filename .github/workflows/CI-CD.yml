@@ -1,4 +1,4 @@
-name: "CI/CD Pipeline (modulaire : back/front + couverture systématique)"
+name: CI/CD Pipeline - Single job (modulaire front/back + couverture systématique)
 
 on:
   push:
@@ -8,20 +8,13 @@ on:
   workflow_dispatch:
     inputs:
       run_backend:
-        description: 'Run backend job'
+        description: 'Forcer l’exécution backend (true/false)'
         required: false
-        default: false
-        type: boolean
+        default: 'false'
       run_frontend:
-        description: 'Run frontend job'
+        description: 'Forcer l’exécution frontend (true/false)'
         required: false
-        default: false
-        type: boolean
-      force_all_coverage:
-        description: 'Force run both jobs (generate coverage for both)'
-        required: false
-        default: false
-        type: boolean
+        default: 'false'
 
 env:
   DOCKERHUB_USERNAME: emysim
@@ -29,12 +22,9 @@ env:
   FRONTEND_IMAGE: emysim/bobapp-frontend
 
 jobs:
-  # 1) Detect changes once and export outputs for other jobs
-  detect:
+  ci-cd:
+    name: Build · Test · Analyze · Deploy (single job)
     runs-on: ubuntu-latest
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -42,7 +32,7 @@ jobs:
           fetch-depth: 0
 
       - name: Detect changes
-        id: filter
+        id: changes
         uses: dorny/paths-filter@v2
         with:
           filters: |
@@ -51,47 +41,15 @@ jobs:
             frontend:
               - 'front/**'
 
-  # 2) Backend job — runs when backend changed OR when manually requested OR when force_all_coverage
-  backend:
-    needs: detect
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.backend == 'true' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_backend == 'true' || github.event.inputs.force_all_coverage == 'true'))
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup JDK (Java 17)
+      # Runtimes
+      - name: Setup JDK 17
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Backend - Build & Test with Coverage
-        working-directory: back
-        env:
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: |
-          mvn -B clean verify jacoco:report
-          ls -R target || true
-
-      - name: Upload Backend Coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-coverage
-          path: back/target/site/jacoco/
-          retention-days: 7
-
-  # 3) Frontend job — runs when frontend changed OR when manually requested OR when force_all_coverage
-  frontend:
-    needs: detect
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_frontend == 'true' || github.event.inputs.force_all_coverage == 'true'))
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - name: Setup Node.js 18
         uses: actions/setup-node@v4
         with:
           node-version: '18'
@@ -104,19 +62,145 @@ jobs:
           path: front/node_modules
           key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
 
+      ################################################################
+      # BACKEND — Build, Tests & Coverage (toujours exécuté pour produire artifact)
+      ################################################################
+      - name: Backend - Build & Test with Coverage
+        id: backend-tests
+        working-directory: back
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: |
+          echo "=== Backend: mvn clean verify + jacoco:report ==="
+          mvn -B clean verify jacoco:report
+          ls -R target || true
+
+      - name: Upload Backend Coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: back/target/site/jacoco/**
+          retention-days: 7
+
+      ################################################################
+      # FRONTEND — Install, Tests & Coverage (toujours exécuté pour produire artifact)
+      ################################################################
+      - name: Frontend - Install Angular CLI (if needed)
+        working-directory: front
+        run: npm install -g @angular/cli || true
+
       - name: Frontend - Install dependencies
         working-directory: front
-        run: npm install -g @angular/cli
+        run: npm ci
 
       - name: Frontend - Run tests with coverage
+        id: frontend-tests
         working-directory: front
         env:
           CI: true
-        run: npm run test:ci
+        run: |
+          echo "=== Frontend: running tests (CI) and generating coverage ==="
+          npm run test:ci
 
-      - name: Upload Frontend Coverage
+      - name: Upload Frontend Coverage artifact
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: front/coverage/
+          path: front/coverage/**
           retention-days: 7
+
+      ################################################################
+      # SonarCloud analysis (utilise les reports générés ci‑dessous)
+      ################################################################
+      - name: Ensure backend compiled (for Sonar)
+        working-directory: back
+        run: mvn -B compile
+
+      - name: SonarCloud Scan
+        id: sonar
+        uses: SonarSource/sonarqube-scan-action@v2
+        with:
+          projectBaseDir: .
+          args: >
+            -Dsonar.projectKey=emysim_BobApp
+            -Dsonar.organization=emysim
+            -Dsonar.java.binaries=back/target/classes
+            -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
+            -Dsonar.javascript.lcov.reportPaths=front/coverage/**/lcov.info
+            -Dsonar.sources=back/src/main/java,front/src
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Wait for Sonar Quality Gate
+        id: qualitygate
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          PROJECT_KEY="emysim_BobApp"
+          echo "⏳ Waiting for SonarCloud analysis to finish..."
+          for i in {1..60}; do
+            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status // empty')
+            if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then
+              echo "Quality Gate: $STATUS"
+              echo "status=$STATUS" >> $GITHUB_OUTPUT
+              break
+            else
+              echo "⏱️ Attempt $i/60: waiting 10s..."
+              sleep 10
+            fi
+          done
+          if [ -z "$STATUS" ]; then
+            echo "❌ Timeout waiting for SonarCloud Quality Gate result."
+            exit 1
+          fi
+
+      ################################################################
+      # Build & Push Docker images — only on main and if Quality Gate OK
+      ################################################################
+      - name: Build & Push Docker Images
+        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          BACK_CHANGED: ${{ steps.changes.outputs.backend }}
+          FRONT_CHANGED: ${{ steps.changes.outputs.frontend }}
+        run: |
+          echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
+
+          if [[ "$BACK_CHANGED" == "true" ]]; then
+            echo "🐳 Building backend image (SHA tag + latest)..."
+            docker build -t $BACKEND_IMAGE:${{ github.sha }} -t $BACKEND_IMAGE:latest ./back
+            docker push $BACKEND_IMAGE:${{ github.sha }}
+            docker push $BACKEND_IMAGE:latest
+          else
+            echo "Backend not changed — skipping backend image build/push."
+          fi
+
+          if [[ "$FRONT_CHANGED" == "true" ]]; then
+            echo "🐳 Building frontend image (SHA tag + latest)..."
+            docker build -t $FRONTEND_IMAGE:${{ github.sha }} -t $FRONTEND_IMAGE:latest ./front
+            docker push $FRONTEND_IMAGE:${{ github.sha }}
+            docker push $FRONTEND_IMAGE:latest
+          else
+            echo "Frontend not changed — skipping frontend image build/push."
+          fi
+
+      - name: Deployment Summary
+        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
+        run: |
+          echo "🚀 Déploiement (images pushées si modifiées)"
+          echo "📦 Backend: $BACKEND_IMAGE (pushed if changed)"
+          echo "📦 Frontend: $FRONTEND_IMAGE (pushed if changed)"
+          echo "🔖 Commit: ${{ github.sha }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+
+      - name: Quality Gate Failed
+        if: steps.qualitygate.outputs.status != 'OK'
+        run: |
+          echo "❌ Quality Gate échouée. Déploiement annulé."
+          exit 1
