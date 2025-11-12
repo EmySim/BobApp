@@ -163,7 +163,7 @@ jobs:
       # Build & Push Docker images — only on main and if Quality Gate OK
       ################################################################
       - name: Build & Push Docker Images
-        if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
+        if: steps.qualitygate.outputs.status == 'OK' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
         env:
           DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
           DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
