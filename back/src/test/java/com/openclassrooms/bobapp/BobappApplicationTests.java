@@ -13,7 +13,7 @@ class BobappApplicationTests {
 
 	@Test
 	void faketest() {
-		Assertions.assertEquals(1, 1);
+		Assertions.assertEquals(1, 0);
 	}
 
 }
