@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: "CI/CD Pipeline (modulaire : back/front + couverture systématique)"
 
 on:
   push:
@@ -6,6 +6,22 @@ on:
   pull_request:
     branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      run_backend:
+        description: 'Run backend job'
+        required: false
+        default: false
+        type: boolean
+      run_frontend:
+        description: 'Run frontend job'
+        required: false
+        default: false
+        type: boolean
+      force_all_coverage:
+        description: 'Force run both jobs (generate coverage for both)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   DOCKERHUB_USERNAME: emysim
@@ -13,20 +29,20 @@ env:
   FRONTEND_IMAGE: emysim/bobapp-frontend
 
 jobs:
-  ci-cd:
-    name: Build, Test, Analyze & Deploy
+  # 1) Detect changes once and export outputs for other jobs
+  detect:
     runs-on: ubuntu-latest
-
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2️⃣ Detect changes
       - name: Detect changes
-        id: changes
+        id: filter
         uses: dorny/paths-filter@v2
         with:
           filters: |
@@ -35,32 +51,22 @@ jobs:
             frontend:
               - 'front/**'
 
-      # 3️⃣ Backend setup
-      - name: Setup JDK 17
-        if: steps.changes.outputs.backend == 'true' 
+  # 2) Backend job — runs when backend changed OR when manually requested OR when force_all_coverage
+  backend:
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.backend == 'true' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_backend == 'true' || github.event.inputs.force_all_coverage == 'true'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup JDK (Java 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'maven'
 
-      # 4️⃣ Frontend setup
-      - name: Setup Node.js
-        if: steps.changes.outputs.frontend == 'true' 
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: 'front/package-lock.json'
-
-      - name: Cache Node modules
-        if: steps.changes.outputs.frontend == 'true' 
-        uses: actions/cache@v4
-        with:
-          path: front/node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
-
-      # 5️⃣ Backend build & test
       - name: Backend - Build & Test with Coverage
         working-directory: back
         env:
@@ -69,7 +75,6 @@ jobs:
           mvn -B clean verify jacoco:report
           ls -R target || true
 
-      #  Artefact couverture backend (JaCoCo)
       - name: Upload Backend Coverage
         uses: actions/upload-artifact@v4
         with:
@@ -77,118 +82,41 @@ jobs:
           path: back/target/site/jacoco/
           retention-days: 7
 
-      # 6️⃣ Frontend build & test
+  # 3) Frontend job — runs when frontend changed OR when manually requested OR when force_all_coverage
+  frontend:
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.frontend == 'true' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.run_frontend == 'true' || github.event.inputs.force_all_coverage == 'true'))
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: 'front/package-lock.json'
+
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: front/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('front/package-lock.json') }}
+
       - name: Frontend - Install dependencies
-        if: steps.changes.outputs.frontend == 'true' 
         working-directory: front
         run: npm install -g @angular/cli
 
       - name: Frontend - Run tests with coverage
-        if: steps.changes.outputs.frontend == 'true'
         working-directory: front
         env:
           CI: true
         run: npm run test:ci
 
-        #  Artefact couverture frontend (lcov)
       - name: Upload Frontend Coverage
         uses: actions/upload-artifact@v4
         with:
           name: frontend-coverage
-          path: front/coverage/bobapp/lcov.info
+          path: front/coverage/
           retention-days: 7
-
-        # 8️⃣ Ensure backend compiled before Sonar (only if backend changed)
-      - name: Ensure backend compiled (for Sonar)
-        if: steps.changes.outputs.backend == 'true'
-        working-directory: back
-        run: mvn -B compile
-
-      # 7️⃣ SonarCloud analysis (only if backend OR frontend changed)
-      - name: SonarCloud Scan
-        #if: steps.changes.outputs.backend == 'true' || steps.changes.outputs.frontend == 'true'
-        uses: SonarSource/sonarqube-scan-action@v2
-        with:
-          projectBaseDir: .
-          args: >
-            -Dsonar.projectKey=emysim_BobApp
-            -Dsonar.organization=emysim
-            -Dsonar.java.binaries=back/target/classes
-            -Dsonar.coverage.jacoco.xmlReportPaths=back/target/site/jacoco/jacoco.xml
-            -Dsonar.javascript.lcov.reportPaths=front/coverage/bobapp/lcov.info
-            -Dsonar.sources=back/src,front/src
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # --- Quality Gate ---
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Wait for Sonar Quality Gate
-        id: qualitygate
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: |
-          PROJECT_KEY="emysim_BobApp"
-          echo "⏳ Waiting for SonarCloud analysis to finish..."
-
-          for i in {1..30}; do
-            STATUS=$(curl -s -u $SONAR_TOKEN: "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$PROJECT_KEY" | jq -r '.projectStatus.status // empty')
-            if [ "$STATUS" = "OK" ] || [ "$STATUS" = "ERROR" ]; then
-              echo "Quality Gate: $STATUS"
-              echo "status=$STATUS" >> $GITHUB_OUTPUT
-              break
-            else
-              echo "⏱️ Attempt $i/30: waiting 10s..."
-              sleep 10
-            fi
-          done
-
-          if [ -z "$STATUS" ]; then
-            echo "❌ Timeout waiting for SonarCloud Quality Gate result."
-            exit 1
-          fi
-             
-
-      # 8️⃣ Docker build & push
-      - name: Build & Push Docker Images
-        #if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
-        env:
-          DOCKERHUB_USERNAME: ${{ env.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-          BACK_CHANGED: ${{ steps.changes.outputs.backend }}
-          FRONT_CHANGED: ${{ steps.changes.outputs.frontend }}
-        run: |
-          echo "✅ Quality Gate OK, starting Docker build..."
-          echo $DOCKERHUB_TOKEN | docker login -u $DOCKERHUB_USERNAME --password-stdin
-
-          if [[ "$BACK_CHANGED" == "true" ]]; then
-            echo "🐳 Building backend image..."
-            docker build -t $BACKEND_IMAGE:latest ./back
-            docker push $BACKEND_IMAGE:latest
-          fi
-
-          if [[ "$FRONT_CHANGED" == "true" ]]; then
-            echo "🐳 Building frontend image..."
-            docker build -t $FRONTEND_IMAGE:latest ./front
-            docker push $FRONTEND_IMAGE:latest
-          fi
-
-      # 9️⃣ Deployment Summary
-      - name: Deployment Summary
-        #if: steps.qualitygate.outputs.status == 'OK' && github.ref == 'refs/heads/main'
-        run: |
-          echo "🚀 Déploiement réussi !"
-          echo "📦 Backend: $BACKEND_IMAGE:latest"
-          echo "📦 Frontend: $FRONTEND_IMAGE:latest"
-          echo "🔖 Commit: ${{ github.sha }}"
-          echo "🌿 Branch: ${{ github.ref_name }}"
-
-      # 10️⃣ Quality Gate Failed
-      - name: Quality Gate Failed
-        if: steps.qualitygate.outputs.status != 'OK'
-        run: |
-          echo "❌ Quality Gate échouée. Déploiement annulé."
-          exit 1
